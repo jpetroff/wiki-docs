@@ -1,12 +1,9 @@
 # WikiDocs
 
-A wiki-style documentation engine built with SvelteKit, Tailwind CSS,
-shadcn-svelte, Bun, and Vite.
-
-**Current state: first-pass scaffold.** The app starts and serves placeholder
-pages. Request classification and server service boundaries exist; Markdown
-rendering, filesystem access, accounts, editing, SQLite, and Git operations are
-not implemented. No documentation repository or credentials are needed to run it.
+A read-only documentation reader built with SvelteKit, Bun, TypeScript,
+Tailwind CSS, markdown-it, and Shiki. Pages contain server-rendered HTML and
+reflect the current files on every request. Reading does not require JavaScript.
+Accounts, editors, directory listings, and Git publishing remain placeholders.
 
 ## Run locally
 
@@ -17,83 +14,93 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Open http://localhost:5173. The scaffold works without an `.env` file.
-Optionally copy `.env.example` to `.env` and customize the site title and future
-documentation location. No folders or database files are created by the app.
+Set `DOCS_DIR` in `.env` to the absolute path of an existing documentation folder.
+The application never creates, clones, or modifies that folder. Builds and startup
+work without it; documentation requests then return HTTP 503.
 
-## Commands
-
-| Command | Purpose |
-| --- | --- |
-| `bun run dev` | Vite development server running under Bun |
-| `bun run check` | Generate SvelteKit types and check Svelte/TypeScript |
-| `bun test` | Request-classification tests |
-| `bun run build` | Vite production build using the Bun adapter |
-| `bun run start` | Run the built Bun server; default port 3000 |
-| `bun run test:smoke` | Check real development and production HTTP routes; build first |
-
-For a local production run:
+For production:
 
 ```sh
 bun run build
 ORIGIN=http://localhost:3000 bun run start
 ```
 
-Set `ORIGIN` to the actual public origin when deploying. `HOST` and `PORT` control
-the production listener. Install build dependencies before building; retain the
-application dependencies for the built server.
+Use the actual public origin when deploying. `HOST` and `PORT` control the listener.
+Retain runtime dependencies with the built Bun server.
+
+## Reading and URLs
+
+- `/` and directory URLs display the exact `README.md`, or return HTTP 404.
+  Directory URLs work with and without trailing slashes.
+- File URLs mirror actual filenames and retain extensions. Allowed extensions:
+  `.md`, `.sh`, `.txt`, `.json`, `.yaml`, `.yml`, `.toml`, `.py`, and `.tf`.
+  Markdown renders as HTML; other allowed UTF-8 text files show highlighted source.
+  Scripts are displayed, never executed. Extension matching is case-sensitive.
+- Extensionless paths try `.md`, `.sh`, `.txt`, `.json`, `.yaml`, `.yml`, `.toml`,
+  `.py`, then `.tf`, in that order. Exact paths take precedence: directories still
+  require their README. Explicit extensions and trailing-slash paths do not fall
+  back to other filenames. Links resolve relative to the actual matched source.
+- Relative links resolve against the source document's directory. For example,
+  `../setup.md#install` in `guide/README.md` links to the root `setup.md` heading.
+  Root-relative paths, queries, encoded filenames, and external URLs are supported.
+  Document anchor IDs and internal fragment links use the `user-content-` prefix.
+- Local PNG, JPEG, GIF, WebP, and AVIF references are rewritten to
+  `/_/assets/<documentation-relative-path>`. The endpoint supports GET and HEAD.
+  SVG and arbitrary downloads are not supported. Remote images are not proxied.
+- Missing files, directories without README, unsupported types, hidden paths,
+  traversal, and symlinks outside the documentation root return 404.
+  Internal symlinks must resolve to visible, allowed files.
+- `?files` and `?edit` display explicit placeholders; files mode takes precedence.
+  Unknown `/_/` service paths return 404. Mutation endpoints remain HTTP 501 stubs.
+
+## Markdown and highlighting
+
+markdown-it handles headings, emphasis, lists, blockquotes, tables, strikethrough,
+links, images, inline code, and fenced/indented code. Embedded documentation HTML,
+including `details` and `summary`, is sanitized with rehype-sanitize. Author styles,
+scripts, event handlers, and unsafe URL schemes are removed. Markdown table
+alignment is preserved. Trusted Shiki highlighting is applied after sanitization.
+
+The shared highlighting configuration defines language aliases, source-extension
+mappings, and the GitHub dark theme. The reader uses one lazy server highlighter;
+future editor adapters must consume the same configuration. Unknown languages
+fall back to literal plain text. The current client bundle includes no editor,
+Markdown parser, or Shiki engine. The app is dark-only, using shadcn/ui neutral
+tokens for surfaces and controls. Dark styling and native controls apply from the
+initial HTML, independent of system preferences or JavaScript; there is no theme toggle.
+
+Code blocks and source pages gain a Copy button after hydration. Copying preserves
+whitespace and reports success or failure; an HTTP fallback supports browsers
+without the Clipboard API. Inline code remains unchanged.
 
 ## Configuration
 
-All configuration is read server-side. Only the site title and a boolean
-indicating whether a documentation folder was configured reach the browser.
-
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `DOCS_DIR` | Unset | Existing documentation folder on this host; future content root |
-| `DATABASE_PATH` | `./data/wiki.sqlite` | Future SQLite file, outside the documentation root |
-| `SITE_TITLE` | `WikiDocs` | Site title |
-| `ORIGIN` | Unset | Public origin used by SvelteKit/Bun adapter |
-| `GIT_REMOTE` | Unset | Future Git remote override; otherwise use checkout upstream |
-| `GIT_BRANCH` | Unset | Future Git branch override; never switch or clone automatically |
+| `DOCS_DIR` | Unset | Absolute path to existing documentation |
+| `SITE_TITLE` | `WikiDocs` | Public site title |
+| `ORIGIN` | Unset | Public origin for SvelteKit/Bun |
+| `DATABASE_PATH` | `./data/wiki.sqlite` | Reserved for future account storage |
+| `GIT_REMOTE` / `GIT_BRANCH` | Unset | Reserved for future publishing |
 
-Use an absolute `DOCS_DIR`. Relative database paths will be relative to the server's
-working directory. In this pass configuration is descriptive only: it does not
-trigger filesystem reads, database initialization, or Git commands.
+Configuration stays server-side. Browser data contains only the site title,
+configuration-presence flag, rendered content, and documentation-relative paths.
+Unavailable roots produce a generic 503; unexpected read failures produce a generic
+500 with details logged server-side. No content cache is kept across requests.
 
-## Scaffold routes
+## Validation
 
-- `/` and any documentation path: read placeholder.
-- `/guide/intro.md?edit`: editor placeholder, not a functioning editor.
-- `/guide/?files`: file-list placeholder. `?files` wins over `?edit`.
-- `/_/login`, `/_/settings`, `/_/publish`: service placeholder pages.
-- POST to login/settings/publish: form-action stubs returning HTTP 501.
-- POST `/_/logout` and POST/PUT/PATCH/DELETE `/_/api/documents`: JSON stubs returning
-  HTTP 501. These do not read request bodies or perform mutations.
-- Unknown `/_/` routes return 404 rather than falling through to documentation.
-- Production application assets use `/_/app/`.
+```sh
+bun test
+bun run check
+bun run build
+bun run test:smoke
+```
 
-Page placeholders return 200 so the scaffold is navigable. Domain results explicitly
-say `not-implemented`; no successful authentication, file read, or save is implied.
-The login inputs and feature buttons are disabled. Raw mutation requests still
-return 501. SvelteKit may reject a cross-origin form request earlier with 403.
+Unit tests cover resolution, containment, URLs, Markdown, sanitization, and source
+preservation. The smoke suite starts isolated development/production servers and
+uses temporary documentation fixtures to check SSR, updates, images, errors,
+reserved routes, and mutation stubs. It never modifies the configured repository.
 
-## Architecture and next steps
-
-`hooks.server.ts` classifies requests. Thin SvelteKit routes delegate to the server
-routing layer, which separates authorization, resource resolution, and execution.
-Server-only modules provide typed stubs for documentation, Markdown, accounts,
-database initialization, and Git. Shared types contain no server configuration.
-
-The installed Blok and Markdown packages are reserved for later passes and are not
-imported by the current application. Generated shadcn components live in
-`src/lib/components/ui`; `components.json` records their registry configuration.
-
-Persistent implementation context:
-
-- [.memory/plan.md](.memory/plan.md): full product roadmap and staged delivery.
-- [.memory/decisions.md](.memory/decisions.md): agreed behavior and constraints.
-- [.memory/scaffolding.md](.memory/scaffolding.md): module map, contracts, and checks.
-
-The next pass is read-only documentation resolution and rendering. Accounts,
-editing, and Git publishing follow separately.
+Persistent context: `.memory/decisions.md`, `.memory/plan.md`, and
+`.memory/rendering.md`. `.memory/scaffolding.md` records the earlier scaffold pass.

@@ -1,34 +1,22 @@
 import type { DocumentationRequest } from '../../shared/request';
 import { notImplemented, type ServiceResult } from '../../shared/result';
-import { authService } from '../auth';
-import { documentationService, type DocumentResource } from '../documentation';
-import { markdownService } from '../markdown';
+import { documentationService } from '../documentation';
+import { markdownService, renderSource, type RenderedDocument } from '../markdown';
+import { sourceLanguage } from '../../shared/highlighting';
 
-/** Execution remains separate from resource resolution and authorization. */
-async function executeDocument(resource: DocumentResource, request: DocumentationRequest): Promise<ServiceResult<unknown>> {
-  if (resource.kind === 'directory') return documentationService.list(resource.path);
-  if (resource.kind === 'asset') return notImplemented('Asset serving');
-
-  const source = await documentationService.read(resource.path);
-  if (source.status !== 'ok') return source;
-  if (request.mode === 'edit') return source;
-  return markdownService.render(source.value.markdown, source.value.path);
-}
-
+/** Read-only execution; editor and directory-listing modes remain explicit stubs. */
 export async function processDocumentationRequest(
-  request: DocumentationRequest,
-  sessionToken?: string
-): Promise<ServiceResult<unknown>> {
-  if (request.mode === 'edit') {
-    const session = await authService.lookupSession(sessionToken);
-    if (session.status !== 'ok') return session;
-    const permission = await authService.authorize('edit', session.value);
-    if (permission.status !== 'ok') return permission;
-  }
-
+  request: DocumentationRequest
+): Promise<ServiceResult<RenderedDocument>> {
+  if (request.mode !== 'view') return notImplemented(request.mode === 'files' ? 'Directory listing' : 'Editor');
   const resource = await documentationService.resolve(request.pathname, request.mode);
   if (resource.status !== 'ok') return resource;
-  return executeDocument(resource.value, request);
+  const source = await documentationService.read(resource.value.path);
+  if (source.status !== 'ok') return source;
+  if (resource.value.kind === 'source') return {
+    status: 'ok', value: await renderSource(source.value.content, source.value.path, sourceLanguage(source.value.path))
+  };
+  return markdownService.render(source.value.content, source.value.path);
 }
 
 export type ServiceAction = 'login' | 'logout' | 'manage-users' | 'save-document' | 'publish';

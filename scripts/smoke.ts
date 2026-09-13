@@ -1,11 +1,22 @@
 import { strict as assert } from 'node:assert';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// Exercise real HTTP dispatch in both runtimes, without a documentation checkout.
+// Exercise real HTTP dispatch using an isolated documentation fixture.
 const scratch = await mkdtemp(join(tmpdir(), 'wiki-docs-smoke-'));
 const modes = ['development', 'production'] as const;
+const docs = join(scratch, 'docs');
+await mkdir(join(docs, 'guide'), { recursive: true });
+await mkdir(join(docs, 'empty'));
+await mkdir(join(docs, 'images'));
+const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5u8AAAAASUVORK5CYII=', 'base64');
+await writeFile(join(docs, 'README.md'), '# Fixture home\n\n[Guide](guide/)\n\n```sh\necho hello\n```');
+await writeFile(join(docs, 'guide', 'README.md'), '# Fixture guide\n\n[Home](../README.md#fixture-home)\n\n![Example](../images/example.png)');
+await writeFile(join(docs, 'guide', 'intro.md'), '# Fixture intro');
+await writeFile(join(docs, 'script.sh'), 'echo "<literal>"\n');
+await writeFile(join(docs, 'invalid.txt'), new Uint8Array([0xff, 0x00]));
+await writeFile(join(docs, 'images', 'example.png'), png);
 
 try {
   for (const mode of modes) {
@@ -17,7 +28,7 @@ try {
     const server = Bun.spawn(command, {
       env: {
         ...process.env,
-        DOCS_DIR: '',
+        DOCS_DIR: docs,
         DATABASE_PATH: join(scratch, 'wiki.sqlite'),
         ORIGIN: origin,
         HOST: '127.0.0.1',
@@ -41,8 +52,14 @@ try {
       assert(ready, `${mode} server did not become ready`);
 
       for (const [path, marker] of [
-        ['/', 'Documentation preview'],
-        ['/guide/intro.md', 'Documentation preview'],
+        ['/', 'Fixture home'],
+        ['/guide', 'Fixture guide'],
+        ['/guide/', 'Fixture guide'],
+        ['/guide/README.md', 'Fixture guide'],
+        ['/script.sh', 'shiki'],
+        ['/script', 'shiki'],
+        ['/guide/intro', 'Fixture intro'],
+        ['/guide/intro.md', 'Fixture intro'],
         ['/guide/?edit', 'Editor preview'],
         ['/guide/intro.md?files', 'File browser preview'],
         ['/?edit&files', 'File browser preview'],
@@ -58,7 +75,37 @@ try {
       }
 
       const rootHtml = await (await fetch(origin)).text();
-      assert(rootHtml.includes('No documentation folder is configured'));
+      assert(rootHtml.includes('user-content-fixture-home'));
+      assert(rootHtml.includes('shiki'));
+      const guideHtml = await (await fetch(`${origin}/guide/`)).text();
+      assert(guideHtml.includes('/README.md#user-content-fixture-home'));
+      assert(guideHtml.includes('/_/assets/images/example.png'));
+      for (const path of ['/missing.md', '/empty', '/invalid.txt', '/images/example.png', '/.private/secret.md', '/_/assets/README.md', '/_/assets/missing.png', '/_/assets/image.svg']) {
+        assert.equal((await fetch(`${origin}${path}`)).status, 404, `Missing or disallowed ${path}`);
+      }
+      // Vite itself intercepts the application's .git path before SvelteKit in dev.
+      assert.equal((await fetch(`${origin}/.git/config`)).status, mode === 'development' ? 403 : 404);
+      for (const method of ['GET', 'HEAD']) {
+        const response = await fetch(`${origin}/_/assets/images/example.png`, { method });
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('content-type'), 'image/png');
+        assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        assert.deepEqual(bytes, method === 'HEAD' ? new Uint8Array() : new Uint8Array(png));
+      }
+      // Temporarily remove only our fixture root to verify the unavailable response.
+      const { rename } = await import('node:fs/promises');
+      await rename(docs, docs + '-unavailable');
+      try {
+        const unavailable = await fetch(origin);
+        assert.equal(unavailable.status, 503);
+        const html = await unavailable.text();
+        assert(html.includes('Documentation unavailable'));
+        assert(!html.includes(scratch));
+      } finally { await rename(docs + '-unavailable', docs); }
+      await writeFile(join(docs, 'guide', 'intro.md'), '# Updated fixture intro');
+      assert((await (await fetch(`${origin}/guide/intro.md`)).text()).includes('Updated fixture intro'));
+      await writeFile(join(docs, 'guide', 'intro.md'), '# Fixture intro');
 
       for (const path of ['/_', '/_/unknown', '/_/unknown?files']) {
         assert.equal((await fetch(`${origin}${path}`)).status, 404, `Reserved service ${path}`);
@@ -91,11 +138,11 @@ try {
           await response.arrayBuffer();
         }
         const manifest = await Bun.file('.svelte-kit/output/client/.vite/manifest.json').text();
-        assert(!/bloklabs|blokeditor/i.test(manifest), 'Blok must remain out of the initial client bundle');
+        assert(!/bloklabs|blokeditor|shiki|markdown-it/i.test(manifest), 'Blok must remain out of the initial client bundle');
       }
 
-      assert.deepEqual(await readdir(scratch), [], 'Requests must not initialize application data');
-      console.log(`${mode}: SSR placeholders, route precedence, 501 mutations, and no database/session writes passed`);
+      assert.deepEqual(await readdir(scratch), ['docs'], 'Requests must not initialize application data');
+      console.log(`${mode}: SSR documents, images, 404/503 responses, route precedence, and 501 mutations passed`);
     } catch (error) {
       server.kill();
       await server.exited;

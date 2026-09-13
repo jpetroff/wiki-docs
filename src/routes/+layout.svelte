@@ -7,7 +7,7 @@
 
 <svelte:head>
   <title>{data.config.siteTitle}</title>
-  <meta name="description" content="WikiDocs documentation engine — initial scaffold." />
+  <meta name="description" content="Project documentation." />
 </svelte:head>
 
 <div class="min-h-screen bg-background text-foreground">
@@ -27,10 +27,9 @@
     </div>
   </header>
   <main id="content" class="mx-auto max-w-5xl px-5 py-10 sm:px-8 sm:py-14">
-    <p class="mb-6 text-xs font-medium uppercase tracking-widest text-muted-foreground">Initial scaffold</p>
     {@render children()}
   </main>
   <footer class="mx-auto max-w-5xl px-5 pb-8 text-sm text-muted-foreground sm:px-8">
-    Reading, accounts, editing, and publishing will be added in later passes.
+    Project documentation
   </footer>
 </div>

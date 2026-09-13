@@ -9,19 +9,18 @@ wiki edits. The documentation repository is separate from this application.
 
 ## Delivery passes
 
-1. **Scaffold (current pass):** Install SvelteKit, TypeScript, Tailwind,
+1. **Scaffold (completed):** Install SvelteKit, TypeScript, Tailwind,
    shadcn-svelte, Bun/Vite, the Bun adapter, Blok, and Markdown dependencies.
    Establish server module boundaries, request classification and explicit stubs,
    a placeholder UI, example configuration, checks, and these memory files.
    Start without DOCS_DIR. Do not implement the following passes yet.
-2. **Read-only documentation:** Resolve paths beneath DOCS_DIR; render sanitized
-   GitHub-flavored Markdown on every request. Exact filenames retain extensions.
-   Folders render README.md or list entries, with canonical trailing slashes.
-   `?files` replaces content with a folder listing (a file URL lists its parent).
-   Sort folders first, retain full filenames, and preserve files mode on folder
-   traversal. Resolve relative links/assets against the source Markdown folder.
+2. **Read-only documentation (implemented):** Resolve paths beneath DOCS_DIR; render sanitized
+   markdown-it HTML with Shiki highlighting on every request. Exact filenames retain extensions.
+   Folders render exact README.md or return 404; both trailing-slash spellings
+   work. Directory listings and `?files` remain deferred placeholders. Resolve relative links/assets against the source Markdown folder.
    Return 404 for missing paths. Contain decoded paths and symlinks within the
-   root, hide private dotfiles/Git metadata, and safely serve non-Markdown assets.
+   root, hide private dotfiles/Git metadata, display allowed text source files, and serve
+   raster images through /_/assets. SVG and arbitrary downloads remain deferred.
 3. **Accounts:** Add bun:sqlite users/sessions, Argon2id passwords, hashed opaque
    session tokens, HttpOnly/SameSite cookies (Secure on HTTPS), a local interactive
    first-admin command, login/logout, password changes, and admin account
@@ -72,3 +71,5 @@ wiki edits. The documentation repository is separate from this application.
 - Markdown API: https://blokeditor.com/docs/use-blocks/
 - shadcn-svelte: https://shadcn-svelte.com/docs/installation/sveltekit
 - Bun/SvelteKit: https://bun.sh/guides/ecosystem/sveltekit
+
+Current implementation details and validation: see `.memory/rendering.md`.

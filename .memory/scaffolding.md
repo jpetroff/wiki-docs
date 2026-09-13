@@ -1,4 +1,7 @@
-# First-pass scaffold handoff
+# First-pass scaffold handoff (historical)
+
+This records the initial pass. Current behavior supersedes the reader stubs and
+listing fallback below; see `rendering.md` and `decisions.md`.
 
 ## Implementation boundary
 
