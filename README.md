@@ -18,15 +18,52 @@ Set `DOCS_DIR` in `.env` to the absolute path of an existing documentation folde
 The application never creates, clones, or modifies that folder. Builds and startup
 work without it; documentation requests then return HTTP 503.
 
-For production:
+For a background production instance alongside development:
 
 ```sh
-bun run build
-ORIGIN=http://localhost:3000 bun run start
+make build
+make status
+make stop
+make start
+make reload
 ```
 
-Use the actual public origin when deploying. `HOST` and `PORT` control the listener.
-Retain runtime dependencies with the built Bun server.
+`BUILD_DIR` and `PORT` are defined in `Makefile`, defaulting to `/home/eugene/www`
+and `8080`. Override them on any command, for example
+`make build BUILD_DIR=/tmp/wiki-site PORT=8081`. Use the same overrides for
+subsequent lifecycle commands. These scripts require Linux, Bash, Bun, `flock`,
+`setsid`, and `curl`, and run the server as the invoking user.
+
+Every successful `make build` bundles the server, runtime dependencies, and
+static assets directly into `BUILD_DIR`, then starts the background instance.
+The existing instance stays available during compilation. Once the build succeeds,
+it is stopped, the directory contents are replaced, and the new build starts.
+This causes a brief interruption. There are no versioned releases or rollback;
+a compilation failure leaves the existing instance running.
+
+Use a dedicated deployment directory: its contents are replaced on every build,
+except the process lock files and `instance.log`, which keeps appended logs.
+The old `releases/` directory and `current` symlink are removed automatically.
+`make status` reports the PID and port, returning exit status 1 when stopped.
+
+The build snapshots `.env`, `.env.local`, and `.env.production` into `BUILD_DIR`
+with owner-only permissions. Rebuild to pick up configuration changes. Keep
+persistent data outside `BUILD_DIR` and configure it with absolute paths.
+The server runs with `BUILD_DIR` as its working directory. No source checkout or
+`node_modules` is needed by the deployed server. `bun run dev` continues to use
+its own development port and source files.
+
+The production listener binds plain HTTP on `0.0.0.0` and accepts any hostname.
+The launcher clears `ORIGIN` and socket overrides and uses `X-Forwarded-Host`
+and `X-Forwarded-Proto` when supplied by the reverse proxy, falling back to the
+request Host and the adapter's HTTPS public-origin default. TLS termination stays
+at the proxy; no public hostname or certificate configuration is needed here.
+The background process survives closing the terminal; automatic boot startup
+or crash recovery is not provided.
+
+You can also invoke `bash scripts/instance.sh {start|status|stop|reload}
+[build-directory] [port]` directly. `bun run build` still produces the usual
+local `build/` output without deploying it.
 
 ## Reading and URLs
 
