@@ -9,7 +9,7 @@
   <Card.Root>
     <Card.Header>
       <Card.Title>Service setup</Card.Title>
-      <Card.Description>Settings is a placeholder. Account management is not implemented.</Card.Description>
+      <Card.Description>Accounts are managed through the local account command. Browser account management is coming later.</Card.Description>
     </Card.Header>
     <Card.Content class="space-y-5">
       <dl class="space-y-4 text-sm">
@@ -21,7 +21,7 @@
           <dd>{data.config.documentationConfigured ? 'Configured; access unavailable' : 'Not configured'}</dd>
         </div>
         <div class="flex flex-wrap justify-between gap-2">
-          <dt class="text-muted-foreground">Accounts</dt><dd>Not implemented</dd>
+          <dt class="text-muted-foreground">Accounts</dt><dd>Managed locally</dd>
         </div>
       </dl>
       <Button disabled>Create account — unavailable</Button>

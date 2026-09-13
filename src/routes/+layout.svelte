@@ -20,9 +20,16 @@
       </a>
       <nav aria-label="Main navigation" class="flex flex-wrap gap-1">
         <Button href="/" variant="ghost" aria-current={page.url.pathname === '/' ? 'page' : undefined}>Documentation</Button>
-        <Button href="/_/settings" variant="ghost" aria-current={page.url.pathname === '/_/settings' ? 'page' : undefined}>Settings</Button>
-        <Button href="/_/publish" variant="ghost" aria-current={page.url.pathname === '/_/publish' ? 'page' : undefined}>Publish</Button>
-        <Button href="/_/login" variant="outline" aria-current={page.url.pathname === '/_/login' ? 'page' : undefined}>Log in</Button>
+        {#if data.user?.role === 'admin'}
+          <Button href="/_/settings" variant="ghost" aria-current={page.url.pathname === '/_/settings' ? 'page' : undefined}>Settings</Button>
+        {/if}
+        {#if data.user}
+          <Button href="/_/publish" variant="ghost" aria-current={page.url.pathname === '/_/publish' ? 'page' : undefined}>Publish</Button>
+          <span class="self-center px-3 text-sm text-muted-foreground">{data.user.login}</span>
+          <form method="POST" action="/_/logout"><Button type="submit" variant="outline">Log out</Button></form>
+        {:else}
+          <Button href={`/_/login?returnTo=${encodeURIComponent(page.url.pathname + page.url.search)}`} variant="outline" aria-current={page.url.pathname === '/_/login' ? 'page' : undefined}>Log in</Button>
+        {/if}
       </nav>
     </div>
   </header>

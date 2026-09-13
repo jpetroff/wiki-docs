@@ -16,11 +16,15 @@ cd "$project"
 stage=$(mktemp -d "$project/.deploy-XXXXXXXX")
 trap 'rm -rf "$stage"' EXIT
 
+# Use the same production environment precedence as the deployed Bun process.
+NODE_ENV=production bun scripts/check-database-path.ts "$root"
 WIKI_BUILD_OUT="$stage/adapter" bun run build
 mkdir "$stage/output"
 # Bundle runtime dependencies too, so development installs and edits cannot
 # change the running server. Bun remains the only runtime dependency.
 bun build "$stage/adapter/index.js" --target=bun --outfile="$stage/output/index.js"
+bun build scripts/accounts.ts --target=bun --outfile="$stage/output/accounts.js"
+bun build scripts/check-database-path.ts --target=bun --outfile="$stage/output/check-database-path.js"
 cp -a "$stage/adapter/client" "$stage/output/"
 if [[ -d $stage/adapter/prerendered ]]; then
   cp -a "$stage/adapter/prerendered" "$stage/output/"
@@ -30,6 +34,9 @@ for file in .env .env.local .env.production; do
     install -m 600 "$project/$file" "$stage/output/$file"
   fi
 done
+
+# Validate the exact copied configuration before stopping or replacing anything.
+(cd "$stage/output" && NODE_ENV=production bun check-database-path.js "$root")
 
 # Keep the existing instance serving until compilation and bundling succeed.
 bash "$project/scripts/instance.sh" stop "$root" "$port" 8>&-

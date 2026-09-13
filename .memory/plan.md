@@ -21,7 +21,12 @@ wiki edits. The documentation repository is separate from this application.
    Return 404 for missing paths. Contain decoded paths and symlinks within the
    root, hide private dotfiles/Git metadata, display allowed text source files, and serve
    raster images through /_/assets. SVG and arbitrary downloads remain deferred.
-3. **Accounts:** Add bun:sqlite users/sessions, Argon2id passwords, hashed opaque
+3. **Accounts (foundation implemented; browser management deferred):** Added local
+   bootstrap/create/reset commands, login/logout, fixed 30-day sessions, server
+   authorization, persistent throttling, and deployment data protection. Remaining:
+   browser account management, enable/disable, self-service password changes, and
+   last-admin protection when enabling those mutations. Original target: bun:sqlite
+   users/sessions, Argon2id passwords, hashed opaque
    session tokens, HttpOnly/SameSite cookies (Secure on HTTPS), a local interactive
    first-admin command, login/logout, password changes, and admin account
    management. No signup/default credentials. Revoke sessions on account disable

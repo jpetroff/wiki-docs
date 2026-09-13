@@ -51,6 +51,7 @@ start() {
   local bun_bin
   [[ -f $root/index.js ]] || { echo "No build at $root; run make build first." >&2; return 1; }
   bun_bin=$(command -v bun)
+  (cd "$root" && NODE_ENV=production "$bun_bin" check-database-path.js "$root")
   (
     cd "$root"
     # Ignore a development ORIGIN or socket setting copied from .env. TLS is

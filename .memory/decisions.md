@@ -1,7 +1,8 @@
 # Agreed decisions
 
 - **Delivery:** Build incrementally. Scaffold and read-only documentation rendering
-  are implemented; editors, listings, accounts, and publishing remain deferred.
+  and login foundations are implemented; editors, listings, browser account management,
+  and publishing remain deferred.
 - **Rendering:** Full server-rendered HTML on each request, not static generation.
 - **Content source:** DOCS_DIR in .env names an existing folder elsewhere on the
   same host. Never clone anything; later discover its enclosing Git checkout.
@@ -48,3 +49,16 @@
 
 - **Theme:** Dark-only shadcn/ui neutral palette; root tokens and native color scheme
   are always dark. No light palette, system preference, or theme toggle.
+
+- **Login foundation (implemented):** Public reading; local bootstrap/create/reset
+  commands, no signup or browser account management. Normalized ASCII usernames,
+  15–128-character passwords, Argon2id, hashed opaque sessions, fixed 30-day expiry.
+  Login/logout and existing edit/publish/settings placeholders enforce server auth.
+- **Account operations:** Password reset revokes all sessions transactionally;
+  concurrent login rechecks the stored password hash before issuing a session.
+  Rate limits persist in SQLite: five attempts per username per 15 minutes,
+  60 globally per minute. See `.memory/authentication.md` for implementation notes.
+- **Persistent production data:** Absolute DATABASE_PATH outside DOCS_DIR and the
+  deployment directory, including symlink equivalents. Deployment preflight runs
+  before replacement; bundled account CLI enforces production paths. Anonymous
+  reading remains available without account storage. No deployment in this pass.

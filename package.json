@@ -10,7 +10,8 @@
     "check": "bun --bun svelte-kit sync && bun --bun svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "test:smoke": "bun scripts/smoke.ts",
-    "prepare": "bun --bun svelte-kit sync"
+    "prepare": "bun --bun svelte-kit sync",
+    "accounts": "bun scripts/accounts.ts"
   },
   "engines": {
     "bun": ">=1.4.0"
