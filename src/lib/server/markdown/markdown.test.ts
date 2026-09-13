@@ -3,9 +3,17 @@ import { markdownService, documentUrl, renderSource } from './index';
 import { normalizeLanguage } from '../../shared/highlighting';
 import { unified } from 'unified';
 import rehypeParse from 'rehype-parse';
-import type { Root, RootContent } from 'hast';
+import type { Element, Root, RootContent } from 'hast';
+import MarkdownIt from 'markdown-it';
+import { mermaidPlugin } from './mermaid';
 function textOf(node: Root | RootContent): string {
   return node.type === 'text' ? node.value : 'children' in node ? node.children.map(textOf).join('') : '';
+}
+function elementsOf(node: Root | RootContent): Element[] {
+  return [
+    ...(node.type === 'element' ? [node] : []),
+    ...('children' in node ? node.children.flatMap(elementsOf) : [])
+  ];
 }
 async function render(source: string) {
   const result = await markdownService.render(source, 'guide/README.md');
@@ -33,6 +41,47 @@ describe('Markdown rendering', () => {
     expect(html).not.toContain('github-light');
     expect(html).not.toContain('--shiki-');
     expect(html).toContain('<span');
+  });
+  test('Mermaid placeholders survive sanitization without highlighting or losing literal source', async () => {
+    const source = '\nflowchart TD\n\tA["<script>bad()</script> & &lt;literal&gt;"] --> B\n\n';
+    const html = await render('```mermaid\n' + source + '```');
+    const elements = elementsOf(unified().use(rehypeParse, { fragment: true }).parse(html));
+    const block = elements.find((node) => node.properties.className?.toString() === 'mermaid-block');
+    expect(block).toBeDefined();
+    expect(block!.children).toHaveLength(1);
+    expect(textOf(block!)).toBe(source);
+    expect(elements.map((node) => node.tagName)).toEqual(['div', 'pre', 'span']);
+    expect(html).not.toContain('shiki');
+    expect(html).not.toContain('<script');
+  });
+  test('recognizes only the exact first Mermaid language token and preserves ordinary fences', async () => {
+    const html = await render([
+      '```mermaid title=example\nflowchart TD\nA --> B\n```',
+      '~~~mermaid\nsequenceDiagram\nAlice->>Bob: Hello\n~~~',
+      '```mermaid\n```',
+      '```Mermaid\ncase-sensitive\n```',
+      '```mermaid-extra\nunknown language\n```',
+      '```js\nconst answer = 42;\n```',
+      '`mermaid`',
+      '    mermaid\n    literal indented code'
+    ].join('\n\n'));
+    expect(html.match(/class="mermaid-block"/g)).toHaveLength(3);
+    expect(html.match(/shiki github-dark/g)).toHaveLength(4);
+    expect(html).toContain('<code>mermaid</code>');
+    expect(html).toContain('case-sensitive');
+    expect(html).toContain('unknown language');
+  });
+  test('Mermaid plugin delegates other fences to an existing custom renderer', () => {
+    const parser = new MarkdownIt();
+    parser.renderer.rules.fence = (tokens, index) => `custom:${tokens[index].content}`;
+    parser.use(mermaidPlugin);
+    expect(parser.render('```js\nexample\n```')).toBe('custom:example\n');
+    expect(parser.render('```mermaid\nflowchart TD\n```')).toContain('class="mermaid-block"');
+  });
+  test('Mermaid class allowance does not admit author styles, SVGs, or arbitrary classes', async () => {
+    const html = await render('<div class="mermaid-block malicious" style="color:red" onclick="bad()"><pre>literal</pre><svg onload="bad()"><path /></svg></div>');
+    expect(html).toContain('class="mermaid-block"');
+    for (const token of ['malicious', 'style=', 'onclick', '<svg', '<path', 'onload']) expect(html).not.toContain(token);
   });
   test('unknown fences and source files preserve literal contents', async () => {
     const content = '<script>danger()</script>\n\t  exact & spacing\n';

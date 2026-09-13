@@ -8,19 +8,24 @@ import type { Root, Element, RootContent } from 'hast';
 import type { ServiceResult } from '../../shared/result';
 import { imageExtensions, extensionOf } from '../../shared/highlighting';
 import { highlightCode } from './highlighter';
+import { mermaidPlugin } from './mermaid';
 
 export interface RenderedDocument { html: string; title: string; sourcePath: string }
 export interface MarkdownService {
   render(markdown: string, sourcePath: string): Promise<ServiceResult<RenderedDocument>>;
 }
-const parser = new MarkdownIt({ html: true, linkify: true, typographer: false });
+const parser = new MarkdownIt({ html: true, linkify: true, typographer: false }).use(mermaidPlugin);
 const idPrefix = 'user-content-';
 const origin = 'https://documentation.invalid';
 const htmlParser = unified().use(rehypeParse, { fragment: true });
 const sanitizer = unified().use(rehypeSanitize, {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary'],
-  attributes: { ...defaultSchema.attributes, details: ['open'] },
+  attributes: {
+    ...defaultSchema.attributes,
+    details: ['open'],
+    div: [...(defaultSchema.attributes?.div ?? []), ['className', 'mermaid-block']]
+  },
   protocols: { ...defaultSchema.protocols, href: ['http', 'https', 'mailto'], src: ['http', 'https'] }
 });
 const stringify = unified().use(rehypeStringify);

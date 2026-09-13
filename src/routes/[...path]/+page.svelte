@@ -1,5 +1,6 @@
 <script lang="ts">
   import { copyCode } from '$lib/actions/copy-code';
+  import { renderMermaid } from '$lib/actions/mermaid';
   let { data } = $props();
 </script>
 
@@ -7,7 +8,7 @@
 {#if data.result.status === 'ok'}
   <section data-documentation-mode="view">
     <p class="mb-6 break-all font-mono text-xs text-muted-foreground">/{data.result.value.sourcePath}</p>
-    <article class="markdown-body" aria-label={data.result.value.title} use:copyCode={data.result.value.html}>
+    <article class="markdown-body" aria-label={data.result.value.title} use:copyCode={data.result.value.html} use:renderMermaid={data.result.value.html}>
       {@html data.result.value.html}
     </article>
   </section>
