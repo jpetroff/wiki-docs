@@ -3,7 +3,8 @@
 Existing Markdown and allowlisted UTF-8 code/text files under `DOCS_DIR` are editable.
 Directory routes target `README.md`; extensionless routes resolve to an existing file.
 Saves update public content immediately. Publishing, Git operations, pending-change
-tracking, page creation, deletion, and uploads remain deferred.
+tracking, deletion, and uploads remain deferred. Page/folder creation and draft
+editing are implemented; see navigation.md.
 
 ## Module boundaries
 
@@ -77,3 +78,11 @@ build, development/production HTTP smoke checks, and Chromium coverage for both
 editors, mode switching, frontmatter, conflicts, fallback, and mobile layout.
 Validation uses temporary documentation/accounts only. The session-local browser
 harness is `/tmp/wiki-docs-visual-check/page-edits.ts`; it is not a tracked test.
+
+## Draft integration
+
+`DocumentEditor` accepts optional `draftParent`; drafts start with empty content and
+POST to the creation endpoint on first save. The persistent navigation context carries
+any newer editor input through navigation to the canonical `?edit` URL, together with
+the saved revision. The newly mounted editor preserves dirty state and later uses the
+existing revision-based save endpoint. Editor engines remain dynamically imported.

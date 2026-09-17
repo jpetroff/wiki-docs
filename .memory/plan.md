@@ -16,8 +16,8 @@ wiki edits. The documentation repository is separate from this application.
    Start without DOCS_DIR. Do not implement the following passes yet.
 2. **Read-only documentation (implemented):** Resolve paths beneath DOCS_DIR; render sanitized
    markdown-it HTML with Shiki highlighting on every request. Exact filenames retain extensions.
-   Folders render exact README.md or return 404; both trailing-slash spellings
-   work. Directory listings and `?files` remain deferred placeholders. Resolve relative links/assets against the source Markdown folder.
+   Folders render exact readable README.md or a directory listing; both trailing-slash spellings
+   work. Directory listings and `?files` are implemented. Resolve relative links/assets against the source Markdown folder.
    Return 404 for missing paths. Contain decoded paths and symlinks within the
    root, hide private dotfiles/Git metadata, display allowed text source files, and serve
    raster images through /_/assets. SVG and arbitrary downloads remain deferred.
@@ -39,9 +39,13 @@ wiki edits. The documentation repository is separate from this application.
    Detect unsupported constructs through AST inspection and semantic round-trip
    checks. Provide Save/Cancel and unsaved-change protection. Save atomically with
    original-content-hash checks; HTTP 409 must retain the user's local edits.
-   No-op saves do not rewrite files. Creation, uploads, moves, renames, and
-   deletion are outside the agreed version.
-5. **Publishing:** Track pending wiki paths/revisions in SQLite. Any editor can
+   No-op saves do not rewrite files. Uploads, moves, renames, and deletion remain deferred.
+5. **Navigation and creation (implemented; see navigation.md):** Persistent folder
+   tree with open root, collapsed nested folders, depth-aware public listing API,
+   README fallback listings, per-folder creation menus, blank folder indexes, and
+   Markdown drafts written only on save. H1-based Unicode filenames use numbered
+   collisions; mutations share existing permissions, origin checks, and save queue.
+6. **Publishing:** Track pending wiki paths/revisions in SQLite. Any editor can
    review all pending wiki edits and publish with a commit message. Serialize
    repository mutations and revalidate the review, file revisions, and HEAD.
    Commit only reviewed wiki changes; identify the publishing user. Use the
@@ -50,7 +54,7 @@ wiki edits. The documentation repository is separate from this application.
    Retain files/status on failure; retry a failed push without duplicating the
    successful local commit. Never reset, force-push, switch branches, or
    automatically merge remote divergence.
-6. **Integration hardening:** Exercise the complete login/edit/save/publish flow
+7. **Integration hardening:** Exercise the complete login/edit/save/publish flow
    and mobile directory navigation. Test HTML without JavaScript, relative links,
    assets, filenames, Markdown preservation, authorization, CSRF, XSS, traversal,
    symlinks, stale edits, and Git failure/retry against temporary local repos.

@@ -24,13 +24,14 @@ Paths below are relative to the application root.
 
 ## Folder lookup and display decisions
 
-There is **no recursive folder scan, directory index, or startup content import**.
+There is no startup content import. Navigation performs request-time directory scans
+with explicit depth limits; see navigation.md.
 Each request probes its path beneath the existing `DOCS_DIR` using `realpath` and
 `stat`. Only extensionless fallback probes multiple candidate names.
 
 | Requested resource | Result |
 | --- | --- |
-| Existing directory, including `/` | Render exact `README.md`; otherwise 404 |
+| Existing directory, including `/` | Render exact readable `README.md`; otherwise list immediate entries |
 | Existing `.md` file | Render Markdown as HTML |
 | Existing allowed non-Markdown file | Show highlighted source; never execute |
 | Absent extensionless leaf | Try allowed suffixes in order; use first resolved candidate |
@@ -40,7 +41,7 @@ Each request probes its path beneath the existing `DOCS_DIR` using `realpath` an
 
 Page extension order: `.md`, `.sh`, `.txt`, `.json`, `.yaml`, `.yml`, `.toml`, `.py`,
 `.tf`. Matching is case-sensitive. Exact paths win over suffix lookup; a directory
-without README does not fall back to a sibling Markdown file. Explicit extensions,
+without README displays a listing and does not fall back to a sibling Markdown file. Explicit extensions,
 trailing-slash paths, and asset requests never use extension fallback. Directory
 URLs work with or without a trailing slash.
 
@@ -126,10 +127,10 @@ announces success/failure, and falls back to `execCommand` when the Clipboard AP
 is unavailable. HTML updates/navigation remove old controls, listeners, and timers.
 Inline code has no button; reading works without JavaScript.
 
-`?files` and `?edit` remain previews, with files mode winning. Mutation endpoints
-remain 501 stubs. No directory listings, editor, accounts, database initialization,
-Git operations, or writes into `DOCS_DIR` are implemented. Build/start does not
-require a documentation root. Private filesystem paths never reach page data.
+`?files` renders directory listings and takes precedence over `?edit`. Editing and
+creation are implemented; see [editing.md](editing.md) and [navigation.md](navigation.md).
+Account-management/publishing mutations remain stubs. Build/start does not require
+a documentation root. Private filesystem paths never reach page data.
 
 ## Validation
 
@@ -146,3 +147,10 @@ leading source whitespace without JavaScript, lazy loading on diagram pages only
 blocked renderer downloads, desktop/mobile layout, existing Copy buttons, and
 navigation while the renderer was loading. Temporary measurement elements were
 removed and no unhandled browser errors occurred.
+
+## Navigation update
+
+The page loader dispatches directory fallback and `?files` views before document-body
+rendering. Explicit files mode resolves directories or the matched file’s parent.
+Root navigation data is server-rendered in the persistent layout; deeper branches
+load via the folder API. See [navigation.md](navigation.md) for contracts and state flow.

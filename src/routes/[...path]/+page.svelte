@@ -3,19 +3,26 @@
   import { renderMermaid } from '$lib/actions/mermaid';
   import { Button } from '$lib/components/ui/button';
   import DocumentEditor from '$lib/components/editors/document-editor.svelte';
+  import DirectoryList from '$lib/components/navigation/directory-list.svelte';
+  import { documentUrl, parentPath } from '$lib/shared/navigation';
   let { data } = $props();
 </script>
 
-<svelte:head><title>{data.edit ? `Edit ${data.edit.path} — ` : data.result?.status === 'ok' ? `${data.result.value.title} — ` : ''}{data.config.siteTitle}</title></svelte:head>
+<svelte:head><title>{data.edit ? `Edit ${data.edit.path} — ` : data.directory ? `${data.directory.name || 'Documentation'} — ` : data.result?.status === 'ok' ? `${data.result.value.title} — ` : ''}{data.config.siteTitle}</title></svelte:head>
 {#if data.edit}
   {#key data.edit.path + data.edit.revision}
     <DocumentEditor document={data.edit} returnTo={data.request.pathname} />
   {/key}
+{:else if data.directory}
+  <DirectoryList directory={data.directory} title={data.config.siteTitle} canEdit={data.canEdit} />
 {:else if data.result?.status === 'ok'}
   <section data-documentation-mode="view">
     <div class="mb-6 flex items-center justify-between gap-4">
       <p class="break-all font-mono text-xs text-muted-foreground">/{data.result.value.sourcePath}</p>
-      {#if data.canEdit}<Button href={`${data.request.pathname}?edit`} variant="outline" data-edit-page>Edit</Button>{/if}
+      <div class="flex gap-2">
+        <Button href={`${documentUrl(parentPath(data.result.value.sourcePath))}?files`} variant="ghost">Files</Button>
+        {#if data.canEdit}<Button href={`${data.request.pathname}?edit`} variant="outline" data-edit-page>Edit</Button>{/if}
+      </div>
     </div>
     <article class="markdown-body" aria-label={data.result.value.title} use:copyCode={data.result.value.html} use:renderMermaid={data.result.value.html}>
       {@html data.result.value.html}

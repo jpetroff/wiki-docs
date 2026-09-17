@@ -1,10 +1,11 @@
 # WikiDocs
 
-A read-only documentation reader built with SvelteKit, Bun, TypeScript,
+A documentation reader and editor built with SvelteKit, Bun, TypeScript,
 Tailwind CSS, markdown-it, and Shiki. Pages contain server-rendered HTML and
 reflect the current files on every request. Reading does not require JavaScript.
-Username/password login and local account administration are available. Editors,
-directory listings, browser account management, and Git publishing remain placeholders.
+Username/password login, local account administration, folder navigation, directory
+listings, and document editing/creation are available. Browser account management
+and Git publishing remain placeholders.
 
 ## Run locally
 
@@ -16,8 +17,9 @@ bun run dev
 ```
 
 Set `DOCS_DIR` in `.env` to the absolute path of an existing documentation folder.
-The application never creates, clones, or modifies that folder. Builds and startup
-work without it; documentation requests then return HTTP 503.
+The application never creates or clones the documentation root. Authorized saves
+and creation modify its contents. Builds and startup work without it; documentation
+requests then return HTTP 503.
 
 For a background production instance alongside development:
 
@@ -75,7 +77,7 @@ local `build/` output without deploying it.
 
 ## Reading and URLs
 
-- `/` and directory URLs display the exact `README.md`, or return HTTP 404.
+- `/` and directory URLs display the exact readable `README.md`, or list the directory.
   Directory URLs work with and without trailing slashes.
 - File URLs mirror actual filenames and retain extensions. Allowed extensions:
   `.md`, `.sh`, `.txt`, `.json`, `.yaml`, `.yml`, `.toml`, `.py`, and `.tf`.
@@ -83,7 +85,7 @@ local `build/` output without deploying it.
   Scripts are displayed, never executed. Extension matching is case-sensitive.
 - Extensionless paths try `.md`, `.sh`, `.txt`, `.json`, `.yaml`, `.yml`, `.toml`,
   `.py`, then `.tf`, in that order. Exact paths take precedence: directories still
-  require their README. Explicit extensions and trailing-slash paths do not fall
+  take precedence over matching file names. Explicit extensions and trailing-slash paths do not fall
   back to other filenames. Links resolve relative to the actual matched source.
 - Relative links resolve against the source document's directory. For example,
   `../setup.md#install` in `guide/README.md` links to the root `setup.md` heading.
@@ -92,14 +94,63 @@ local `build/` output without deploying it.
 - Local PNG, JPEG, GIF, WebP, and AVIF references are rewritten to
   `/_/assets/<documentation-relative-path>`. The endpoint supports GET and HEAD.
   SVG and arbitrary downloads are not supported. Remote images are not proxied.
-- Missing files, directories without README, unsupported types, hidden paths,
+- Missing files, unsupported types, hidden paths,
   traversal, and symlinks outside the documentation root return 404.
   Internal symlinks must resolve to visible, allowed files.
-- `?files` and authorized `?edit` requests display explicit placeholders; files mode
-  takes precedence. Edit/Publish require an editor or administrator; Settings
+- `?files` lists a directory or the resolved file’s parent; it takes precedence
+  over `?edit`. Authorized `?edit` opens the editor. Edit/Publish require an editor
+  or administrator; Settings
   requires an administrator. Anonymous protected page requests redirect to login.
-  Unknown `/_/` service paths return 404. Document/account-management/publishing
-  mutations return 401/403 without permission and remain HTTP 501 stubs when authorized.
+  Unknown `/_/` service paths return 404. Mutations return 401/403 without permission.
+  Account-management/publishing mutations remain HTTP 501 stubs when authorized.
+
+## Navigation and creation
+
+The left navigation keeps the documentation root open and nested folders collapsed
+on a fresh load. Folder names open their README or directory listing and expand
+visible children. Chevrons expand/collapse without navigating; expansion persists
+during client navigation. On small screens, use **Browse documentation**.
+
+Folders sort before naturally ordered filenames. Exact `README.md` files are folder
+overviews and never appear as tree/list entries. Hidden paths, unsupported files,
+images, binary/invalid UTF-8 files, and cyclic directory links are omitted. Internal
+symlinks retain the reader's containment checks. **Files** opens an explicit listing,
+including when a README exists. Links and directory listings work without JavaScript.
+
+Editors and administrators see a **+** beside each folder and the root:
+
+- **New folder** asks for a name, preserves its trimmed spelling, and creates the
+  directory with a blank `README.md`. Existing names are rejected.
+- **New document** opens a draft under `/_/new?parent=<relative-path>`. It writes
+  nothing until Save. Use the first top-level Markdown H1 for the title; code fences,
+  frontmatter, and headings inside quotes/lists do not supply the filename.
+- Saving normalizes the heading into a lowercase Unicode filename with `.md`.
+  Punctuation and whitespace become hyphens. Existing names receive `-2`, `-3`, etc.
+  Filenames stay within 255 UTF-8 bytes. Markdown content is preserved unchanged.
+- The saved document stays in the editor; newer input made during the save is retained
+  as unsaved changes. Later title changes do not rename it. Canceling a draft creates
+  nothing, and failed saves retain the draft. Drafts are not stored across reloads.
+
+`GET /_/api/folders?path=&depth=1` returns `{status: "ok", value: <directory>}`.
+`path` is a decoded documentation-relative directory path (URL-encode it as a query
+value); an empty path selects root. Integer depth 0 returns folder metadata, depth 1
+includes immediate children, and up to 10 child levels can be requested. Directory
+nodes contain `kind`, `name`, `path`, `hasIndex`, `hasChildren`, and optional `children`;
+file nodes contain `kind: "file"`, `name`, and `path`. Responses are not cached.
+
+Creation uses JSON `POST /_/api/folders` with `{parentPath, name}` or
+`POST /_/api/documents/create` with `{parentPath, content}`. Both require a same-origin
+editor/admin session, enforce a 2 MiB request limit, and return HTTP 201 with the
+created path (plus revision for documents). Parents must already exist. Existing
+files are saved through `PUT /_/api/documents` (or its POST alias) with
+`{path, content, originalRevision}`; stale revisions return HTTP 409.
+
+Creation and saves share a process-local queue. Completed new documents are published
+using an exclusive hard link from a sibling temporary file, so readers do not see a
+partial document and occupied names are never replaced. Folder creation is exclusive;
+failed operations remove only their own empty artifacts. External filesystem writers
+are not locked, so the existing checkout must remain under trusted local control.
+Uploads, moves, renames, deletion, durable drafts, and Git publishing remain deferred.
 
 ## Markdown and highlighting
 
@@ -111,9 +162,9 @@ alignment is preserved. Trusted Shiki highlighting is applied after sanitization
 
 The shared highlighting configuration defines language aliases, source-extension
 mappings, and the GitHub dark theme. The reader uses one lazy server highlighter;
-future editor adapters must consume the same configuration. Unknown languages
-fall back to literal plain text. The current client bundle includes no editor,
-Markdown parser, or Shiki engine. The app is dark-only, using shadcn/ui neutral
+editor adapters use the same configuration. Unknown languages fall back to literal
+plain text. Reader pages load no editor, Markdown parser, or Shiki engine; editors
+load lazily when editing. The app is dark-only, using shadcn/ui neutral
 tokens for surfaces and controls. Dark styling and native controls apply from the
 initial HTML, independent of system preferences or JavaScript; there is no theme toggle.
 
@@ -212,5 +263,5 @@ reserved routes, login/logout, proxy cookie flags, authorization, session persis
 and storage-failure behavior. CLI tests use temporary pseudo-terminals to check
 bootstrap/create/reset without echoing passwords and unsafe deployment rejection. It never modifies the configured repository.
 
-Persistent context: `.memory/decisions.md`, `.memory/plan.md`, and
-`.memory/rendering.md`. `.memory/scaffolding.md` records the earlier scaffold pass.
+Persistent context: `.memory/decisions.md`, `.memory/plan.md`,
+`.memory/rendering.md`, `.memory/editing.md`, and `.memory/navigation.md`. `.memory/scaffolding.md` records the earlier scaffold pass.

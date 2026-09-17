@@ -1,22 +1,24 @@
-import { notImplemented, type ServiceResult } from '../../shared/result';
+import type { ServiceResult } from '../../shared/result';
 import type { DocumentationMode } from '../../shared/request';
 import { getServerConfig } from '../config';
 import { createFileReader, revisionOf, type ResolvedFile, type SaveResult } from './filesystem';
+import type { DirectoryNode } from '../../shared/navigation';
 
 export type DocumentResource = ResolvedFile;
 export interface DocumentSource { path: string; content: string; revision: string }
-export interface DirectoryEntry { name: string; path: string; kind: 'file' | 'directory' }
 export interface SaveDocumentInput { path: string; content: string; originalRevision: string }
 export interface DocumentationService {
   resolve(pathname: string, mode: DocumentationMode): Promise<ServiceResult<DocumentResource>>;
   read(path: string): Promise<ServiceResult<DocumentSource>>;
-  list(path: string): Promise<ServiceResult<DirectoryEntry[]>>;
+  resolveDirectory: ReturnType<typeof createFileReader>['resolveDirectory'];
+  list(path: string, depth?: number): Promise<ServiceResult<DirectoryNode>>;
+  createFolder: ReturnType<typeof createFileReader>['createFolder'];
+  createDocument: ReturnType<typeof createFileReader>['createDocument'];
   save(input: SaveDocumentInput): Promise<SaveResult>;
 }
 export const documentationFiles = createFileReader(() => getServerConfig().docsDir);
 export const documentationService: DocumentationService = {
-  async resolve(pathname, mode) {
-    if (mode === 'files') return notImplemented('Directory listing');
+  async resolve(pathname) {
     return documentationFiles.resolve(pathname);
   },
   async read(path) {
@@ -30,6 +32,9 @@ export const documentationService: DocumentationService = {
       path, content, revision: revisionOf(bytes.value)
     } };
   },
-  async list() { return notImplemented('Directory listing'); },
+  resolveDirectory: documentationFiles.resolveDirectory,
+  list: documentationFiles.list,
+  createFolder: documentationFiles.createFolder,
+  createDocument: documentationFiles.createDocument,
   async save(input) { return documentationFiles.save(input.path, input.content, input.originalRevision); }
 };

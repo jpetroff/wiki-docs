@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import { mkdtemp, readdir, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, mkdir, writeFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createAuthService } from '../src/lib/server/auth';
@@ -85,8 +85,9 @@ try {
         ['/script', 'shiki'],
         ['/guide/intro', 'Fixture intro'],
         ['/guide/intro.md', 'Fixture intro'],
-        ['/guide/intro.md?files', 'File browser preview'],
-        ['/?edit&files', 'File browser preview'],
+        ['/guide/intro.md?files', 'data-documentation-mode="files"'],
+        ['/?edit&files', 'data-documentation-mode="files"'],
+        ['/empty', 'This folder has no documents or folders to display.'],
         ['/_/login?edit', 'Welcome back']
       ]) {
         const response = await fetch(`${origin}${path}`);
@@ -100,10 +101,32 @@ try {
       assert(!rootHtml.includes('data-edit-page'), 'Anonymous SSR must omit the Edit button');
       assert(rootHtml.includes('user-content-fixture-home'));
       assert(rootHtml.includes('shiki'));
+      assert(rootHtml.includes('aria-label="Documentation tree"'));
+      assert(!rootHtml.includes('aria-label="Create in '), 'Anonymous navigation omits creation controls');
+      const tree = await (await fetch(`${origin}/_/api/folders?path=guide&depth=1`)).json();
+      assert.equal(tree.value.hasIndex, true);
+      assert.deepEqual(tree.value.children.map((entry: { name: string }) => entry.name), ['intro.md']);
+      const metadata = await (await fetch(`${origin}/_/api/folders?path=guide&depth=0`)).json();
+      assert.equal(metadata.value.hasChildren, true);
+      assert.equal(metadata.value.children, undefined);
+      for (const depth of ['-1', '11', '1.5', 'all', '']) {
+        assert.equal((await fetch(`${origin}/_/api/folders?depth=${depth}`)).status, 400);
+      }
+      for (const path of ['../outside', '.private', '_', 'missing', 'script.sh']) {
+        assert.equal((await fetch(`${origin}/_/api/folders?${new URLSearchParams({ path })}`)).status, 404);
+      }
+      // The root also falls back to a real listing when its index is absent.
+      const homeSource = await Bun.file(join(docs, 'README.md')).text();
+      await unlink(join(docs, 'README.md'));
+      try {
+        const fallback = await fetch(origin);
+        assert.equal(fallback.status, 200);
+        assert((await fallback.text()).includes('data-documentation-mode="files"'));
+      } finally { await writeFile(join(docs, 'README.md'), homeSource); }
       const guideHtml = await (await fetch(`${origin}/guide/`)).text();
       assert(guideHtml.includes('/README.md#user-content-fixture-home'));
       assert(guideHtml.includes('/_/assets/images/example.png'));
-      for (const path of ['/missing.md', '/empty', '/invalid.txt', '/images/example.png', '/.private/secret.md', '/_/assets/README.md', '/_/assets/missing.png', '/_/assets/image.svg']) {
+      for (const path of ['/missing.md', '/invalid.txt', '/images/example.png', '/.private/secret.md', '/_/assets/README.md', '/_/assets/missing.png', '/_/assets/image.svg']) {
         assert.equal((await fetch(`${origin}${path}`)).status, 404, `Missing or disallowed ${path}`);
       }
       // Vite itself intercepts the application's .git path before SvelteKit in dev.
@@ -135,7 +158,7 @@ try {
       }
 
       for (const [method, path] of [
-        ['POST', '/_/settings'],
+        ['POST', '/_/settings'], ['POST', '/_/api/folders'], ['POST', '/_/api/documents/create'],
         ['POST', '/_/publish'], ['POST', '/_/api/documents'],
         ['PUT', '/_/api/documents'], ['PATCH', '/_/api/documents'], ['DELETE', '/_/api/documents']
       ]) {
@@ -205,6 +228,7 @@ try {
         assert(signedHtml.includes('data-edit-page'), 'Authorized SSR must render the Edit button');
         assert(signedHtml.includes('smoke-admin') && signedHtml.includes('Log out'));
         assert(!signedHtml.includes(cookie.split('=')[1]));
+        assert(signedHtml.includes('aria-label="Create in '));
         for (const [path, marker] of [['/_/settings', 'Service setup'], ['/_/publish', 'Publish changes'], ['/guide/?edit', 'Edit page'], ['/script?edit', 'Edit page']]) {
           const response = await fetch(`${origin}${path}`, { headers: { cookie } });
           assert.equal(response.status, 200);
@@ -230,6 +254,40 @@ try {
         assert((await (await fetch(`${origin}/script.sh`)).text()).includes('saved'));
         assert.equal((await save('stale edit')).status, 409);
         await writeFile(join(docs, 'script.sh'), source);
+        const create = (endpoint: string, input: unknown, extra: Record<string, string> = {}) => fetch(`${origin}${endpoint}`, {
+          method: 'POST', headers: { origin, cookie: editorCookie, 'content-type': 'application/json', ...extra }, body: JSON.stringify(input)
+        });
+        const folderInput = { parentPath: 'guide', name: 'New #é% folder' };
+        assert.equal((await create('/_/api/folders', folderInput, { origin: 'https://evil.test' })).status, 403);
+        assert.equal((await create('/_/api/documents/create', { parentPath: '', content: '# Blocked' }, { origin: 'https://evil.test' })).status, 403);
+        const createdFolder = await create('/_/api/folders', folderInput);
+        assert.equal(createdFolder.status, 201);
+        const folderPath = (await createdFolder.json()).value.path;
+        assert.equal(await Bun.file(join(docs, folderPath, 'README.md')).text(), '');
+        assert.equal((await create('/_/api/folders', folderInput)).status, 409);
+        assert.equal((await create('/_/api/folders', { parentPath: '', name: '../bad' })).status, 400);
+        const beforeDraft = await readdir(join(docs, folderPath));
+        const draft = await fetch(`${origin}/_/new?${new URLSearchParams({ parent: folderPath })}`, { headers: { cookie: editorCookie } });
+        assert.equal(draft.status, 200);
+        assert((await draft.text()).includes('New document'));
+        assert.deepEqual(await readdir(join(docs, folderPath)), beforeDraft, 'Opening a draft never writes files');
+        const documentInput = { parentPath: folderPath, content: '# New **Document**\n\nSaved body\n' };
+        assert.equal((await create('/_/api/documents/create', { ...documentInput, content: 'No H1' })).status, 400);
+        assert.deepEqual(await readdir(join(docs, folderPath)), beforeDraft);
+        assert.equal((await create('/_/api/documents/create', { ...documentInput, parentPath: 'missing' })).status, 404);
+        const createdDocument = await create('/_/api/documents/create', documentInput);
+        assert.equal(createdDocument.status, 201);
+        const createdValue = (await createdDocument.json()).value;
+        assert.equal(createdValue.path, `${folderPath}/new-document.md`);
+        assert.equal(await Bun.file(join(docs, createdValue.path)).text(), documentInput.content);
+        const numbered = await create('/_/api/documents/create', documentInput);
+        assert.equal(numbered.status, 201);
+        assert.equal((await numbered.json()).value.path, `${folderPath}/new-document-2.md`);
+        const legacySave = await create('/_/api/documents', { path: createdValue.path, content: '# Edited heading', originalRevision: createdValue.revision });
+        assert.equal(legacySave.status, 200, 'POST remains an alias for existing-document saves');
+        const refreshed = await (await fetch(`${origin}/_/api/folders?${new URLSearchParams({ path: folderPath })}`)).json();
+        assert.deepEqual(refreshed.value.children.map((entry: { name: string }) => entry.name), ['new-document-2.md', 'new-document.md']);
+        await rm(join(docs, folderPath), { recursive: true });
         assert.equal((await fetch(`${origin}/_/settings`, { headers: { cookie: editorCookie } })).status, 403);
         assert.equal((await fetch(`${origin}/_/settings`, { method: 'POST', headers: { origin, cookie: editorCookie }, body: new URLSearchParams() })).status, 403);
         const editorHtml = await (await fetch(origin, { headers: { cookie: editorCookie } })).text();
@@ -263,7 +321,7 @@ try {
           assert.equal((await login('smoke-editor')).status, 503);
         }
       } finally { auth.close(); }
-      console.log(`${mode}: reader, login/logout, cookies, CSRF, and authorization passed`);
+      console.log(`${mode}: reader, navigation/listings, creation, saves, login/logout, cookies, CSRF, and authorization passed`);
     } catch (error) {
       server.kill();
       await server.exited;

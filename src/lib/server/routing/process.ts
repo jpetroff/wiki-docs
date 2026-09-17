@@ -4,7 +4,7 @@ import { documentationService } from '../documentation';
 import { markdownService, renderSource, type RenderedDocument } from '../markdown';
 import { sourceLanguage } from '../../shared/highlighting';
 
-/** Read-only execution; editor and directory-listing modes remain explicit stubs. */
+/** Render document bodies. Directory views and editing are dispatched by the page loader. */
 export async function processDocumentationRequest(
   request: DocumentationRequest
 ): Promise<ServiceResult<RenderedDocument>> {

@@ -1,23 +1,22 @@
 # Agreed decisions
 
 - **Delivery:** Build incrementally. Scaffold and read-only documentation rendering
-  and login foundations and page editing are implemented; listings, browser account
-  management, and publishing remain deferred.
+  and login foundations, page editing, navigation, listings, and creation are implemented;
+  browser account management and publishing remain deferred.
 - **Rendering:** Full server-rendered HTML on each request, not static generation.
 - **Content source:** DOCS_DIR in .env names an existing folder elsewhere on the
   same host. Never clone anything; later discover its enclosing Git checkout.
 - **URLs:** Documentation paths mirror actual filenames, including extensions.
-  Folders require the exact README.md filename, otherwise return 404.
+  Folders render exact readable README.md, otherwise an immediate directory listing.
   Both trailing-slash spellings are accepted.
   `/_/` is reserved for service paths and application assets.
-- **Files mode:** `?files` remains an explicit placeholder in the reading pass.
-  Future listings use the folder or a file’s parent. It takes precedence over `?edit`.
+- **Files mode:** `?files` lists the folder or a resolved file’s parent. It takes precedence over `?edit`.
 - **Reading/accounts:** Public reading; administrators create editor accounts.
   No self-registration. Bootstrap the first administrator with a local command.
 - **Storage:** SQLite outside DOCS_DIR for users, sessions, and eventual pending
   wiki change tracking. Use Bun's native SQLite/password APIs, no database ORM.
 - **Editing:** All existing allowed Markdown and text/code pages. Folder editing targets an existing README.
-  No page creation, uploads, moves, renames, or deletion in this version.
+  Page/folder creation is implemented; uploads, moves, renames, and deletion remain deferred.
 - **Editor:** Blok client-only, Markdown-compatible tools; Monaco for code and source mode. Preserve frontmatter
   and fall back to plain Markdown source for unsupported constructs. Source
   editing remains available. Never silently discard unsupported content.
@@ -43,7 +42,7 @@
   503 for documentation requests. Missing/blocked resources return 404.
 
 - **Extensionless routes:** Try the ordered page allowlist only when an exact path
-  is absent; directories keep README-or-404 behavior. Asset URLs stay explicit.
+  is absent; directories keep precedence and render README or a listing. Asset URLs stay explicit.
 - **Copy code:** Client-side progressive enhancement adds buttons to block code and
   source pages, preserving text with success/failure feedback and HTTP fallback.
 
@@ -62,3 +61,12 @@
   deployment directory, including symlink equivalents. Deployment preflight runs
   before replacement; bundled account CLI enforces production paths. Anonymous
   reading remains available without account storage. No deployment in this pass.
+
+- **Navigation and creation (implemented):** Root stays open; nested folders start
+  collapsed. Folder links open and expand, chevrons only toggle. Hide exact README.md,
+  unsupported/binary/private files, and cyclic directory links. Public folder API
+  accepts a relative start path and depth 0–10. Editors create folders with blank
+  indexes or in-memory document drafts. First top-level H1 produces a lowercase
+  Unicode `.md` filename; collisions add numbers. Existing titles never rename files.
+  Save alone writes a draft; failed saves/canceled drafts leave input intact/no file.
+  See navigation.md for service contracts, consistency, and validation.
