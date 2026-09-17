@@ -1,0 +1,79 @@
+# Editing architecture
+
+Existing Markdown and allowlisted UTF-8 code/text files under `DOCS_DIR` are editable.
+Directory routes target `README.md`; extensionless routes resolve to an existing file.
+Saves update public content immediately. Publishing, Git operations, pending-change
+tracking, page creation, deletion, and uploads remain deferred.
+
+## Module boundaries
+
+Paths below are relative to `src/`.
+
+| Module | Responsibility |
+| --- | --- |
+| `routes/[...path]/+page.server.ts` | Authorize `?edit`; load `{path, content, revision, kind}`; derive `canEdit`. |
+| `routes/[...path]/+page.svelte` | SSR Edit control only when `canEdit`; mount editor keyed by path/revision. |
+| `lib/components/editors/document-editor.svelte` | Lazy loading, mode switches, save requests, dirty/busy state, navigation guards, recovery. |
+| `lib/components/editors/types.ts` | Adapter contract: `getValue(): Promise<string>`, `destroy(): void`. |
+| `lib/components/editors/blok.ts` | Restricted Blok tools, Markdown import, round-trip validation. |
+| `lib/components/editors/markdown.ts` | Unsupported-syntax detection, frontmatter/EOL preservation, semantic comparison. |
+| `lib/components/editors/serialize.ts` | Enabled-block serialization; escape literal Markdown and preserve raw code/fences. |
+| `lib/components/editors/monaco.ts` | Code/source editing, language mapping, theme, worker/model lifecycle. |
+| `routes/_/api/documents/+server.ts` | Origin/auth checks, bounded JSON validation, HTTP status mapping. |
+| `lib/server/documentation/index.ts` | Resolve/read/save service; UTF-8 decoding and SHA-256 revisions. |
+| `lib/server/documentation/filesystem.ts` | Path containment, extension checks, serialized atomic replacement. |
+
+## Read and editor flow
+
+`GET ?edit` → server permission check → resolve/read → SSR editor shell → client adapter.
+Anonymous edit requests redirect to login. Unauthorized readers receive no Edit
+control in HTML. Page responses use `Cache-Control: no-store`; editor engines load
+only in the browser when editing.
+
+Blok enables paragraphs, H1–H6, lists/checklists, quotes, dividers, code, bold,
+italic, links, strikethrough, and inline code. Tool definitions exclude colors,
+sizes, and collapsible headings. HTML, images, tables, reference definitions,
+import warnings, unknown block types, or unequal markdown-it render output trigger
+Monaco fallback. Frontmatter is retained separately; unchanged exports return the
+original source. Changed visual exports restore EOL style and terminal-newline presence.
+
+Monaco handles code files and Markdown source mode. It uses the shared language
+mapping, GitHub dark palette, basic TOML/JSON tokenizers, same-origin Vite workers,
+and textarea input (`editContext: false`). Mode switches serialize before disposal.
+Initialization is inert until ready; failures expose recoverable source and retry.
+Adapters dispose editors, models, and listeners on exit.
+
+## Save contract and consistency
+
+`PUT /_/api/documents` (`POST` alias):
+
+```json
+{ "path": "guide/README.md", "content": "# Updated\n", "originalRevision": "<SHA-256>" }
+```
+
+Origin and session checks precede body parsing. Maximum JSON request size: 2 MiB.
+Paths must identify exact existing allowed files; private paths, traversal,
+outside-root symlinks, binary content, and malformed input are rejected.
+
+Save sequence: process-local promise queue → resolve/revalidate → compare current
+SHA-256 → write/fsync sibling temporary file → recheck path/hash → atomic rename.
+File permissions are retained; no-op saves skip replacement. The queue serializes
+aliases too. External writers are not locked: final hash-check/rename is not an
+atomic compare-and-swap across processes.
+
+Success returns `{status: 'ok', value: {revision}}`. Stale revisions return `409`;
+other failures include `400`, `401`, `403`, `404`, `413`, `415`, `500`, and `503`.
+`PATCH`/`DELETE` return `405` after authorization. The client retains local edits on
+failure, adopts successful revisions, and keeps newer in-flight edits dirty.
+Navigation/unload guards protect unsaved changes. There is no durable browser draft.
+
+## Build and validation
+
+Rolldown uses two threads; adapter precompression is disabled to limit build memory.
+Vite excludes the ESM editors from eager dependency optimization.
+
+Verified: 58 focused filesystem/save/Markdown tests, clean `bun run check`, production
+build, development/production HTTP smoke checks, and Chromium coverage for both
+editors, mode switching, frontmatter, conflicts, fallback, and mobile layout.
+Validation uses temporary documentation/accounts only. The session-local browser
+harness is `/tmp/wiki-docs-visual-check/page-edits.ts`; it is not a tracked test.

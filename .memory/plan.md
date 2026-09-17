@@ -32,7 +32,7 @@ wiki edits. The documentation repository is separate from this application.
    management. No signup/default credentials. Revoke sessions on account disable
    or password reset; protect the last admin. Enforce authorization, same-origin
    mutations, and login throttling server-side.
-4. **Editing:** `?edit` opens existing Markdown or an existing folder README for
+4. **Editing (implemented; see editing.md):** `?edit` opens existing Markdown, allowed code files or an existing folder README for
    authenticated editors; anonymous visitors go to login with a safe return URL.
    Mount/destroy Blok client-side, limit tools to Markdown-compatible structures,
    preserve frontmatter, and offer source editing when syntax cannot round-trip.

@@ -1,8 +1,8 @@
 # Agreed decisions
 
 - **Delivery:** Build incrementally. Scaffold and read-only documentation rendering
-  and login foundations are implemented; editors, listings, browser account management,
-  and publishing remain deferred.
+  and login foundations and page editing are implemented; listings, browser account
+  management, and publishing remain deferred.
 - **Rendering:** Full server-rendered HTML on each request, not static generation.
 - **Content source:** DOCS_DIR in .env names an existing folder elsewhere on the
   same host. Never clone anything; later discover its enclosing Git checkout.
@@ -16,9 +16,9 @@
   No self-registration. Bootstrap the first administrator with a local command.
 - **Storage:** SQLite outside DOCS_DIR for users, sessions, and eventual pending
   wiki change tracking. Use Bun's native SQLite/password APIs, no database ORM.
-- **Editing:** Existing Markdown only. Folder editing targets an existing README.
+- **Editing:** All existing allowed Markdown and text/code pages. Folder editing targets an existing README.
   No page creation, uploads, moves, renames, or deletion in this version.
-- **Editor:** Blok client-only, Markdown-compatible tools. Preserve frontmatter
+- **Editor:** Blok client-only, Markdown-compatible tools; Monaco for code and source mode. Preserve frontmatter
   and fall back to plain Markdown source for unsupported constructs. Source
   editing remains available. Never silently discard unsupported content.
 - **Save visibility:** Local saves become publicly visible immediately. Publish
@@ -38,7 +38,7 @@
   files display UTF-8 source. Extensions are explicit and case-sensitive.
 - **Images:** PNG/JPEG/GIF/WebP/AVIF via /_/assets; SVG and arbitrary downloads deferred.
 - **Highlighting:** Shared GitHub dark theme, language registry and aliases;
-  editor choice remains open. No editor or highlighter engine in the reader client.
+  Monaco uses the shared language mapping and GitHub dark palette. No editor or highlighter engine in the reader client.
 - **Unavailable docs:** Missing/invalid DOCS_DIR is valid at build/start but returns
   503 for documentation requests. Missing/blocked resources return 404.
 

@@ -5,7 +5,9 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 const config = {
   preprocess: vitePreprocess(),
   kit: {
-    adapter: adapter({ out: process.env.WIKI_BUILD_OUT || 'build' }),
+    // The adapter otherwise compresses every editor chunk concurrently at maximum
+    // Brotli quality, which exhausts memory on constrained build hosts.
+    adapter: adapter({ out: process.env.WIKI_BUILD_OUT || 'build', precompress: false }),
     appDir: '_/app'
   }
 };

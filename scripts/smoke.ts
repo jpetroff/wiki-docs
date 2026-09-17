@@ -97,6 +97,7 @@ try {
       }
 
       const rootHtml = await (await fetch(origin)).text();
+      assert(!rootHtml.includes('data-edit-page'), 'Anonymous SSR must omit the Edit button');
       assert(rootHtml.includes('user-content-fixture-home'));
       assert(rootHtml.includes('shiki'));
       const guideHtml = await (await fetch(`${origin}/guide/`)).text();
@@ -159,8 +160,15 @@ try {
           assert(!response.headers.get('content-type')?.includes('text/html'), 'Asset must not resolve to a page');
           await response.arrayBuffer();
         }
-        const manifest = await Bun.file('.svelte-kit/output/client/.vite/manifest.json').text();
-        assert(!/bloklabs|blokeditor|shiki|markdown-it/i.test(manifest), 'Blok must remain out of the initial client bundle');
+        const manifest = JSON.parse(await Bun.file('.svelte-kit/output/client/.vite/manifest.json').text());
+        const initial = new Set<string>();
+        function visit(key: string) {
+          if (initial.has(key)) return;
+          initial.add(key);
+          for (const dependency of manifest[key]?.imports ?? []) visit(dependency);
+        }
+        for (const key of Object.keys(manifest).filter((key) => key.includes('nodes/'))) visit(key);
+        assert(!/bloklabs|blokeditor|monaco|shiki|markdown-it/i.test([...initial].join(' ')), 'Editor engines must remain out of static page dependencies');
       }
 
       assert(!(await readdir(scratch)).includes(`accounts-${mode}`), 'Anonymous requests must not initialize account storage');
@@ -194,21 +202,34 @@ try {
         assert(!/; Secure/i.test(setCookie) && !/Domain=/i.test(setCookie));
         const cookie = setCookie.split(';')[0];
         const signedHtml = await (await fetch(origin, { headers: { cookie } })).text();
+        assert(signedHtml.includes('data-edit-page'), 'Authorized SSR must render the Edit button');
         assert(signedHtml.includes('smoke-admin') && signedHtml.includes('Log out'));
         assert(!signedHtml.includes(cookie.split('=')[1]));
-        for (const [path, marker] of [['/_/settings', 'Service setup'], ['/_/publish', 'Publish changes'], ['/guide/?edit', 'Editor preview']]) {
+        for (const [path, marker] of [['/_/settings', 'Service setup'], ['/_/publish', 'Publish changes'], ['/guide/?edit', 'Edit page'], ['/script?edit', 'Edit page']]) {
           const response = await fetch(`${origin}${path}`, { headers: { cookie } });
           assert.equal(response.status, 200);
           assert.equal(response.headers.get('cache-control'), 'no-store');
           assert((await response.text()).includes(marker));
         }
-        for (const path of ['/_/settings', '/_/publish', '/_/api/documents']) {
+        for (const path of ['/_/settings', '/_/publish']) {
           const response = await fetch(`${origin}${path}`, { method: 'POST', headers: { origin, cookie }, body: new URLSearchParams() });
           assert.equal(response.status, 501);
         }
         const editor = await login('smoke-editor');
         assert.equal(editor.status, 303);
         const editorCookie = editor.headers.get('set-cookie')!.split(';')[0];
+        const source = 'echo "<literal>"\n';
+        const originalRevision = new Bun.CryptoHasher('sha256').update(source).digest('hex');
+        const save = (content: string, extra: Record<string, string> = {}) => fetch(`${origin}/_/api/documents`, {
+          method: 'PUT', headers: { origin, cookie: editorCookie, 'content-type': 'application/json', ...extra },
+          body: JSON.stringify({ path: 'script.sh', content, originalRevision })
+        });
+        assert.equal((await save('blocked', { origin: 'https://evil.test' })).status, 403);
+        assert.equal((await save('blocked', { cookie: '' })).status, 401);
+        assert.equal((await save('echo saved\n')).status, 200);
+        assert((await (await fetch(`${origin}/script.sh`)).text()).includes('saved'));
+        assert.equal((await save('stale edit')).status, 409);
+        await writeFile(join(docs, 'script.sh'), source);
         assert.equal((await fetch(`${origin}/_/settings`, { headers: { cookie: editorCookie } })).status, 403);
         assert.equal((await fetch(`${origin}/_/settings`, { method: 'POST', headers: { origin, cookie: editorCookie }, body: new URLSearchParams() })).status, 403);
         const editorHtml = await (await fetch(origin, { headers: { cookie: editorCookie } })).text();

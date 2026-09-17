@@ -1,5 +1,5 @@
-import { realpath, stat, readFile } from 'node:fs/promises';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { realpath, stat, readFile, open, rename, unlink } from 'node:fs/promises';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { documentExtensions, imageExtensions, extensionOf } from '../../shared/highlighting';
 import type { ServiceResult } from '../../shared/result';
 
@@ -9,6 +9,8 @@ export interface ResolvedFile {
   path: string;
 }
 const missing = (): ServiceResult<never> => ({ status: 'not-found' });
+export const revisionOf = (bytes: string | Uint8Array) => new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
+export type SaveResult = ServiceResult<{ revision: string }> | { status: 'conflict' };
 function isMissing(error: unknown) {
   return ['ENOENT', 'ENOTDIR', 'ELOOP'].includes((error as { code?: string }).code ?? '');
 }
@@ -31,6 +33,8 @@ export function decodeDocumentPath(pathname: string): string | undefined {
 
 /** Inject the root getter so filesystem tests never depend on .env or SvelteKit. */
 export function createFileReader(getRoot: () => string | undefined) {
+  // One process owns the checkout. Serialize saves, including symlink aliases.
+  let saving: Promise<unknown> = Promise.resolve();
   async function root(): Promise<string | undefined> {
     const configured = getRoot();
     if (!configured || !isAbsolute(configured)) return;
@@ -101,5 +105,51 @@ export function createFileReader(getRoot: () => string | undefined) {
       throw error;
     }
   }
-  return { resolve: resolveFile, read };
+  async function write(path: string, content: string, originalRevision: string): Promise<SaveResult> {
+    const resource = await resolveFile('/' + path.split('/').map(encodeURIComponent).join('/'));
+    if (resource.status !== 'ok') return resource;
+    // Saving never creates a page or resolves an abbreviated filename.
+    if (resource.value.path !== path) return missing();
+    const base = await root();
+    if (!base) return { status: 'unavailable' };
+    let temporary: string | undefined;
+    try {
+      const actual = await checkedPath(base, path);
+      if (!actual) return missing();
+      const info = await stat(actual);
+      if (!info.isFile()) return missing();
+      const current = await readFile(actual);
+      try {
+        if (new TextDecoder('utf-8', { fatal: true }).decode(current).includes('\0')) return missing();
+      } catch { return missing(); }
+      if (revisionOf(current) !== originalRevision) return { status: 'conflict' };
+      const revision = revisionOf(content);
+      if (revision === originalRevision) return { status: 'ok', value: { revision } };
+      temporary = resolve(dirname(actual), `.wiki-save-${crypto.randomUUID()}`);
+      const handle = await open(temporary, 'wx', info.mode & 0o777);
+      try {
+        await handle.writeFile(content, 'utf8');
+        await handle.chmod(info.mode & 0o777);
+        await handle.sync();
+      } finally { await handle.close(); }
+      // Recheck manual changes and path replacements before atomic replacement.
+      if (await checkedPath(base, path) !== actual ||
+          await realpath(dirname(actual)) !== dirname(actual) ||
+          revisionOf(await readFile(actual)) !== originalRevision) return { status: 'conflict' };
+      await rename(temporary, actual);
+      temporary = undefined;
+      return { status: 'ok', value: { revision } };
+    } catch (error) {
+      if (isMissing(error)) return missing();
+      throw error;
+    } finally {
+      if (temporary) await unlink(temporary).catch(() => {});
+    }
+  }
+  function save(path: string, content: string, originalRevision: string): Promise<SaveResult> {
+    const operation = saving.then(() => write(path, content, originalRevision));
+    saving = operation.catch(() => {});
+    return operation;
+  }
+  return { resolve: resolveFile, read, save };
 }
