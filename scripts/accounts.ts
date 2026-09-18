@@ -52,6 +52,7 @@ async function main() {
     production: import.meta.file === 'accounts.js' || process.env.NODE_ENV === 'production',
     deploymentDir: import.meta.file === 'accounts.js' ? import.meta.dir : process.cwd()
   };
+  console.log(`Database path: ${options.path}`)
   validateDatabasePath(options);
   let login = username;
   if (command === 'bootstrap') {

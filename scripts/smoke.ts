@@ -183,6 +183,17 @@ try {
           assert(!response.headers.get('content-type')?.includes('text/html'), 'Asset must not resolve to a page');
           await response.arrayBuffer();
         }
+        const vendorRoot = 'build/client/_/app/immutable/vendor';
+        const blokDirectory = (await readdir(vendorRoot)).find((name) => name.startsWith('blok-'));
+        assert(blokDirectory, 'Production build must include the Blok browser modules');
+        const chunk = (await readdir(join(vendorRoot, blokDirectory, 'chunks'))).find((name) => name.endsWith('.mjs'));
+        assert(chunk, 'Blok browser modules must include their dependencies');
+        for (const file of ['blok.mjs', 'tools.mjs', 'markdown.mjs', `chunks/${chunk}`]) {
+          const response = await fetch(`${origin}/_/app/immutable/vendor/${blokDirectory}/${file}`);
+          assert.equal(response.status, 200, `Blok asset ${file}`);
+          assert(response.headers.get('content-type')?.includes('javascript'), 'ESM assets need a JavaScript MIME type');
+          assert.equal(await response.text(), await Bun.file(join(vendorRoot, blokDirectory, file)).text());
+        }
         const manifest = JSON.parse(await Bun.file('.svelte-kit/output/client/.vite/manifest.json').text());
         const initial = new Set<string>();
         function visit(key: string) {

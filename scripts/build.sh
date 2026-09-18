@@ -22,7 +22,9 @@ WIKI_BUILD_OUT="$stage/adapter" bun run build
 mkdir "$stage/output"
 # Bundle runtime dependencies too, so development installs and edits cannot
 # change the running server. Bun remains the only runtime dependency.
-bun build "$stage/adapter/index.js" --target=bun --outfile="$stage/output/index.js"
+# The server graph also emits editor CSS. --outfile gives both outputs the same
+# name in Bun; --outdir keeps index.js and index.css separate.
+bun build "$stage/adapter/index.js" --target=bun --outdir="$stage/output"
 bun build scripts/accounts.ts --target=bun --outfile="$stage/output/accounts.js"
 bun build scripts/check-database-path.ts --target=bun --outfile="$stage/output/check-database-path.js"
 cp -a "$stage/adapter/client" "$stage/output/"

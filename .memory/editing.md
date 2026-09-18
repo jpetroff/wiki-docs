@@ -72,6 +72,11 @@ Navigation/unload guards protect unsaved changes. There is no durable browser dr
 
 Rolldown uses two threads; adapter precompression is disabled to limit build memory.
 Vite excludes the ESM editors from eager dependency optimization.
+Production builds use `scripts/blok-assets.ts` to serve Blok's prebuilt ESM graph
+as local assets under a content-hashed directory, retaining relative imports and
+license notices. Rebundling its optional renderers/locales alongside Monaco caused
+OOM kills (exit 137) during client compilation. Development still uses Vite's
+normal module resolution. The focused asset test checks the emitted import graph.
 
 Verified: 58 focused filesystem/save/Markdown tests, clean `bun run check`, production
 build, development/production HTTP smoke checks, and Chromium coverage for both
