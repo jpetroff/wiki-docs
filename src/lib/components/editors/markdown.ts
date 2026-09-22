@@ -12,7 +12,7 @@ export function supportsVisualMarkdown(source: string): boolean {
   const tokens = parser.parse(body, {});
   // Reference definitions (including unused ones) must survive, as must raw HTML.
   if (/^ {0,3}\[[^\]\n]+\]:/m.test(body)) return false;
-  return !tokens.some((token) => token.type === 'html_block' || token.type === 'table_open' ||
+  return !tokens.some((token) => token.type === 'html_block' || (token.type === 'table_open' && token.level !== 0) ||
     token.children?.some((child) => child.type === 'html_inline' || child.type === 'image'));
 }
 

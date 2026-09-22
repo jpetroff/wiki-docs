@@ -1,9 +1,8 @@
 import { Blok } from '@bloklabs/core';
-import { Paragraph, Header, List, Quote, Divider, Code, Bold, Italic, Link, Strikethrough, InlineCode } from '@bloklabs/core/tools';
+import { Paragraph, Header, List, Quote, Divider, Code, Table, Bold, Italic, Link, Strikethrough, InlineCode } from '@bloklabs/core/tools';
 import { markdownToBlocksWithReport } from '@bloklabs/core/markdown';
 import { supportsVisualMarkdown, sameMarkdownMeaning, splitFrontmatter, restoreMarkdown } from './markdown';
 import type { EditorAdapter } from './types';
-import { serializeMarkdown } from './serialize';
 
 // Blok's default paragraph/heading menus include colors, and quotes have sizes.
 // Override those menus rather than hiding non-Markdown controls with CSS.
@@ -20,7 +19,7 @@ class MarkdownHeader extends Header {
 }
 class MarkdownQuote extends Quote { renderSettings() { return []; } }
 class MarkdownCode extends Code { renderSettings() { return []; } }
-const allowed = new Set(['paragraph', 'header', 'list', 'quote', 'divider', 'code']);
+const allowed = new Set(['paragraph', 'header', 'list', 'quote', 'divider', 'code', 'table']);
 
 export async function mountBlok(holder: HTMLElement, source: string, onChange: () => void): Promise<EditorAdapter | null> {
   if (!supportsVisualMarkdown(source)) return null;
@@ -39,6 +38,7 @@ export async function mountBlok(holder: HTMLElement, source: string, onChange: (
       quote: { class: MarkdownQuote, inlineToolbar: true },
       divider: Divider,
       code: { class: MarkdownCode, inlineToolbar: false },
+      table: { class: Table, inlineToolbar: true, config: { withHeadings: true } },
       bold: Bold, italic: Italic, link: Link, strikethrough: Strikethrough, inlineCode: InlineCode
     },
     onBeforePaste: () => null,
@@ -46,16 +46,14 @@ export async function mountBlok(holder: HTMLElement, source: string, onChange: (
   });
   try {
     await editor.isReady;
-    const baseline = serializeMarkdown(await editor.save());
+    const baseline = await editor.blocks.exportMarkdown();
     if (!sameMarkdownMeaning(body, baseline)) { editor.destroy(); return null; }
     ready = true;
     return {
       async getValue() {
-        const data = await editor.save();
-        if (data.blocks.some((block) => !allowed.has(block.type))) throw new Error('This block cannot be saved as Markdown. Remove it before saving.');
-        return restoreMarkdown(source, serializeMarkdown(data), baseline);
+        return restoreMarkdown(source, await editor.blocks.exportMarkdown(), baseline);
       },
-      destroy: () => editor.destroy()
+      destroy: () => { ready = false; editor.destroy(); }
     };
   } catch (error) { editor.destroy(); throw error; }
 }

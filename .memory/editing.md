@@ -18,7 +18,6 @@ Paths below are relative to `src/`.
 | `lib/components/editors/types.ts` | Adapter contract: `getValue(): Promise<string>`, `destroy(): void`. |
 | `lib/components/editors/blok.ts` | Restricted Blok tools, Markdown import, round-trip validation. |
 | `lib/components/editors/markdown.ts` | Unsupported-syntax detection, frontmatter/EOL preservation, semantic comparison. |
-| `lib/components/editors/serialize.ts` | Enabled-block serialization; escape literal Markdown and preserve raw code/fences. |
 | `lib/components/editors/monaco.ts` | Code/source editing, language mapping, theme, worker/model lifecycle. |
 | `routes/_/api/documents/+server.ts` | Origin/auth checks, bounded JSON validation, HTTP status mapping. |
 | `lib/server/documentation/index.ts` | Resolve/read/save service; UTF-8 decoding and SHA-256 revisions. |
@@ -31,12 +30,24 @@ Anonymous edit requests redirect to login. Unauthorized readers receive no Edit
 control in HTML. Page responses use `Cache-Control: no-store`; editor engines load
 only in the browser when editing.
 
-Blok enables paragraphs, H1–H6, lists/checklists, quotes, dividers, code, bold,
-italic, links, strikethrough, and inline code. Tool definitions exclude colors,
-sizes, and collapsible headings. HTML, images, tables, reference definitions,
+Blok enables paragraphs, H1–H6, lists/checklists, quotes, dividers, code, top-level
+Markdown pipe tables, bold, italic, links, strikethrough, and inline code. Existing text-tool
+definitions exclude colors, sizes, and collapsible headings; tables use native controls. HTML, images,
+tables nested in lists/quotes, reference definitions,
 import warnings, unknown block types, or unequal markdown-it render output trigger
 Monaco fallback. Frontmatter is retained separately; unchanged exports return the
 original source. Changed visual exports restore EOL style and terminal-newline presence.
+
+### Markdown tables
+
+The bundled, unmodified Blok Table tool is registered with `withHeadings: true`.
+Import uses Blok's `markdownToBlocksWithReport`; baseline and edited output use
+`editor.blocks.exportMarkdown()` for the whole document. There is no package patch,
+custom serializer, table reconciliation, or custom table UI. Blok owns conversion
+and its Markdown limitations (including loss of column alignment, merged cells,
+heading columns and styling). The existing semantic import guard still falls back
+to source mode when native import/export changes the source's rendered meaning.
+Frontmatter, EOL style and unchanged original bytes remain preserved by the adapter.
 
 Monaco handles code files and Markdown source mode. It uses the shared language
 mapping, GitHub dark palette, basic TOML/JSON tokenizers, same-origin Vite workers,

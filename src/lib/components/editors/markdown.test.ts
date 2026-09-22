@@ -8,11 +8,13 @@ test('preserves frontmatter, CRLF, and unchanged Markdown bytes', () => {
   expect(restoreMarkdown(source, '# Edited', '# Hello')).toBe('\uFEFF---\r\ntitle: "Exact"\r\n---\r\n# Edited\r\n');
 });
 
-test('unsupported HTML, images, tables and reference definitions require source mode', () => {
-  for (const source of ['<details>Keep me</details>', 'A <span>word</span>', '![Image](test.png)', '| A | B |\n| - | - |\n| 1 | 2 |', '[unused]: /target']) {
+test('unsupported HTML, images, nested tables and reference definitions require source mode', () => {
+  for (const source of ['<details>Keep me</details>', 'A <span>word</span>', '![Image](test.png)', '> | A |\n> | --- |\n> | 1 |', '- item\n\n  | A |\n  | --- |\n  | 1 |', '| A |\n| --- |\n| <br> |', '[unused]: /target']) {
     expect(supportsVisualMarkdown(source)).toBe(false);
   }
   expect(supportsVisualMarkdown('# Heading\n\n**Bold** and `code`\n\n- item\n\n```sh\necho hello\n```')).toBe(true);
+  expect(supportsVisualMarkdown('| A | B |\n| :--- | ---: |\n| 1 | 2 |')).toBe(true);
+  expect(supportsVisualMarkdown('| A |\n| --- |')).toBe(true);
 });
 
 test('semantic comparison catches changed Markdown while allowing equivalent delimiters', () => {
