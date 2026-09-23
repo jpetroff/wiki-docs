@@ -1,3 +1,4 @@
+import { parseFrontmatter } from '../documentation/frontmatter';
 import MarkdownIt from 'markdown-it';
 import GithubSlugger from 'github-slugger';
 import { unified } from 'unified';
@@ -64,7 +65,8 @@ export function documentUrl(value: string, sourcePath: string, image = false): s
 }
 export const markdownService: MarkdownService = {
   async render(markdown, sourcePath) {
-    let tree = htmlParser.parse(parser.render(markdown)) as Root;
+    const frontmatter = parseFrontmatter(markdown);
+    let tree = htmlParser.parse(parser.render(frontmatter.body)) as Root;
     const slugger = new GithubSlugger();
     let title = '';
     walk(tree, (node) => {
@@ -102,7 +104,7 @@ export const markdownService: MarkdownService = {
     }
     await highlight(tree);
     return { status: 'ok', value: {
-      html: stringify.stringify(tree), title: title || sourcePath.split('/').at(-1) || 'Documentation', sourcePath
+      html: stringify.stringify(tree), title: frontmatter.title || title || sourcePath.split('/').at(-1) || 'Documentation', sourcePath
     } };
   }
 };

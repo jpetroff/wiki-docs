@@ -8,7 +8,6 @@
   import { parentPath } from '$lib/shared/navigation';
   let { data, children } = $props();
   const navigation = setContext(navigationKey, new NavigationState(untrack(() => data.navigation)));
-  $effect(() => { const root = data.navigation; untrack(() => { if (root) navigation.seed(root); }); });
   const showNavigation = $derived(!page.url.pathname.startsWith('/_/') || page.url.pathname === '/_/new');
   const activePath = $derived.by(() => {
     const content = page.data.result;

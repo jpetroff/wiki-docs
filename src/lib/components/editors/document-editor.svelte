@@ -114,7 +114,7 @@
       }
       saved = content;
       dirty = (await adapter.getValue()) !== saved;
-      message = dirty ? 'Saved. You have newer unsaved changes.' : 'Saved locally. Changes are visible to readers.';
+      message = dirty ? 'Saved. You have newer unsaved changes.' : 'Saved locally. Document content is live; navigation updates after a manual scan and reload.';
       if (wasCreating && navigation) {
         // Carry newer input through the real route change without sending it to disk.
         transferring = true;
@@ -146,7 +146,7 @@
       <Button onclick={save} disabled={!ready || busy || !dirty}>{busy ? 'Working…' : 'Save changes'}</Button>
     </div>
   </div>
-  {#if draftParent !== undefined && !workingPath}<p class="text-sm text-muted-foreground">Add a level-one heading for the title. Its text becomes the filename when you save. Nothing is created until then.</p>{/if}
+  {#if draftParent !== undefined && !workingPath}<p class="text-sm text-muted-foreground">Add a front matter title or a level-one heading. The front matter title takes precedence for the filename when you save. Nothing is created until then.</p>{/if}
   <p class="text-sm text-muted-foreground">{sourceMode ? 'Monaco source editor' : 'Blok Markdown editor'} · {dirty ? 'Unsaved changes' : 'No unsaved changes'}</p>
   <p class="text-sm text-muted-foreground">Saving updates this site immediately. Repository changes are pushed manually.</p>
   {#if message}<p role="status" class="text-sm">{message}</p>{/if}

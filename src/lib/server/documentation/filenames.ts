@@ -1,12 +1,13 @@
+import { parseFrontmatter } from './frontmatter';
 import MarkdownIt from 'markdown-it';
 
 const parser = new MarkdownIt({ html: true });
 export function documentStem(content: string): string | undefined {
-  const body = content.replace(/^(\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$))/, '');
+  const { body, title: metadataTitle } = parseFrontmatter(content);
   const tokens = parser.parse(body, {});
   const heading = tokens.findIndex((token) => token.type === 'heading_open' && token.tag === 'h1' && token.level === 0);
-  if (heading < 0) return;
-  const title = (tokens[heading + 1]?.children ?? []).map((token) =>
+  if (!metadataTitle && heading < 0) return;
+  const title = metadataTitle ?? (tokens[heading + 1]?.children ?? []).map((token) =>
     ['text', 'code_inline', 'image'].includes(token.type) ? token.content :
       ['softbreak', 'hardbreak'].includes(token.type) ? ' ' : ''
   ).join('');

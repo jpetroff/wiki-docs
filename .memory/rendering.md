@@ -24,8 +24,8 @@ Paths below are relative to the application root.
 
 ## Folder lookup and display decisions
 
-There is no startup content import. Navigation performs request-time directory scans
-with explicit depth limits; see navigation.md.
+There is no startup content import. Navigation uses a manually generated snapshot;
+see [navigation.md](navigation.md) and [frontmatter.md](frontmatter.md).
 Each request probes its path beneath the existing `DOCS_DIR` using `realpath` and
 `stat`. Only extensionless fallback probes multiple candidate names.
 
@@ -55,7 +55,7 @@ The resolved logical filename—not an absolute filesystem path—travels downst
 
 ```text
 tracked URL → classify → resolve file → read UTF-8
-  Markdown: markdown-it + Mermaid plugin → rehype-parse → headings/URLs → rehype-sanitize
+  Markdown: extract front matter → markdown-it + Mermaid plugin → rehype-parse → headings/URLs → rehype-sanitize
                         → Shiki code AST → rehype-stringify
   Source:   Shiki code AST → rehype-stringify
 → { html, title, sourcePath } → server-rendered article → clipboard + Mermaid enhancement
@@ -72,7 +72,9 @@ safe `align` attribute before styles are removed. Trusted Shiki output is added
 
 Heading IDs use GitHub-style slugs, duplicate suffixes, and the sanitizer's
 `user-content-` prefix. Internal document fragments receive the matching prefix.
-The first heading supplies the page title; files without headings use their name.
+Front matter `title` takes precedence over the first nonempty heading for the page
+title; files without either use their name. Metadata does not add a body heading
+or change heading IDs. See [frontmatter.md](frontmatter.md) for parsing and fallback rules.
 
 ## Links and images
 
@@ -93,7 +95,8 @@ SVG and arbitrary downloads are unsupported.
 
 Shared configuration defines languages, aliases, filename mappings, and
 `github-dark` theme. Unknown languages render as plain text. The
-reader caches only the Shiki instance; file content is read on every request.
+reader reuses the Shiki instance; file content is read on every request. Navigation
+metadata has its own snapshot cache.
 Future source-editor adapters must reuse this configuration. Editor selection is
 deferred; Markdown parsing and highlighting engines stay outside the client bundle.
 
@@ -152,5 +155,6 @@ removed and no unhandled browser errors occurred.
 
 The page loader dispatches directory fallback and `?files` views before document-body
 rendering. Explicit files mode resolves directories or the matched file’s parent.
-Root navigation data is server-rendered in the persistent layout; deeper branches
-load via the folder API. See [navigation.md](navigation.md) for contracts and state flow.
+The complete navigation snapshot is server-rendered in the persistent layout;
+deeper branches expand from memory without folder API requests. See
+[navigation.md](navigation.md) for contracts and state flow.

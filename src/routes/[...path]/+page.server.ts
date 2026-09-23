@@ -34,11 +34,22 @@ export const load: PageServerLoad = async (event) => {
       if (resource.status !== 'ok') error(404, 'Page not found');
       path = parentPath(resource.value.path);
     }
+    // README availability is live, independent of the navigation snapshot.
+    if (request.mode !== 'files') {
+      const resource = await documentationService.resolve(request.pathname, 'view');
+      if (resource.status === 'ok') {
+        const result = await processDocumentationRequest(request);
+        if (result.status !== 'not-found') {
+          return { request, canEdit, directory: null, edit: null,
+            result: await documentationResponse(async () => result) };
+        }
+      } else if (resource.status !== 'not-found') {
+        await documentationResponse(async () => resource);
+      }
+    }
     const listing = await documentationResponse(() => documentationService.list(path));
     if (listing.status !== 'ok') error(404, 'Folder not found');
-    if (request.mode === 'files' || !listing.value.hasIndex) {
-      return { request, canEdit, edit: null, result: null, directory: listing.value };
-    }
+    return { request, canEdit, edit: null, result: null, directory: listing.value };
   }
   return { request, canEdit, directory: null, edit: null, result: await documentationResponse(() => processDocumentationRequest(request)) };
 };

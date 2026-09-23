@@ -1,18 +1,11 @@
 import { getPublicConfig } from '$lib/server/config';
 import type { LayoutServerLoad } from './$types';
-import { documentationService } from '$lib/server/documentation';
+import { navigationCache } from '$lib/server/documentation';
 import { authorize } from '$lib/server/auth';
 
-export const load: LayoutServerLoad = async ({ locals, url, depends }) => {
-  depends('documentation:navigation');
-  const showNavigation = !url.pathname.startsWith('/_/') || url.pathname === '/_/new';
-  let navigation = null;
-  if (showNavigation) {
-    try {
-      const result = await documentationService.list('', 1);
-      if (result.status === 'ok') navigation = result.value;
-    } catch (cause) { console.error('Navigation load failed', cause); }
-  }
+export const load: LayoutServerLoad = async ({ locals }) => {
+  const result = await navigationCache.tree();
+  const navigation = result.status === 'ok' ? result.value : null;
   return { config: getPublicConfig(), user: locals.session?.user ?? null, navigation,
     canCreate: !locals.authUnavailable && authorize('edit', locals.session).status === 'ok' };
 };

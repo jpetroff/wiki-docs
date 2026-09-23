@@ -3,49 +3,36 @@ import type { DirectoryNode } from '$lib/shared/navigation';
 export const navigationKey = Symbol('documentation-navigation');
 export class NavigationState {
   pendingEdit?: { path: string; content: string; saved: string; revision: string };
-  folders = $state<Record<string, DirectoryNode>>({});
-  expanded = $state<Record<string, boolean>>({ '': true });
-  loading = $state<Record<string, boolean>>({});
-  errors = $state<Record<string, string>>({});
-  private requests = new Map<string, Promise<void>>();
-
+  folders = $state<Record<string, DirectoryNode>>(Object.create(null));
+  expanded = $state<Record<string, boolean>>(Object.assign(Object.create(null), { '': true }));
   constructor(root: DirectoryNode | null) { if (root) this.seed(root); }
-  seed(folder: DirectoryNode) {
-    const previous = this.folders[folder.path];
-    this.folders[folder.path] = { ...folder, ...(!folder.hasChildren ? { children: [] } :
-      folder.children === undefined && previous?.children ? { children: previous.children } : {}) };
-    for (const child of folder.children ?? []) if (child.kind === 'directory') this.seed(child);
+  seed(root: DirectoryNode) {
+    const folders: Record<string, DirectoryNode> = Object.create(null);
+    const pending = [root];
+    while (pending.length) {
+      const folder = pending.pop()!;
+      folders[folder.path] = folder;
+      for (const child of folder.children ?? []) if (child.kind === 'directory') pending.push(child);
+    }
+    this.folders = folders;
   }
-  async load(path: string, refresh = false) {
-    const pending = this.requests.get(path);
-    if (pending) return pending;
-    if (!refresh && this.folders[path]?.children) return;
-    const request = (async () => {
-      this.loading[path] = true;
-      this.errors[path] = '';
-      try {
-        const response = await fetch('/_/api/folders?' + new URLSearchParams({ path, depth: '1' }));
-        const result = await response.json();
-        if (!response.ok || result.status !== 'ok') throw new Error(result.message ?? 'Unable to load folder');
-        this.seed(result.value);
-      } catch (error) {
-        this.errors[path] = error instanceof Error ? error.message : 'Unable to load folder';
-      } finally { this.loading[path] = false; }
-    })();
-    this.requests.set(path, request);
-    try { await request; } finally { this.requests.delete(path); }
+  expand(path: string) {
+    if (this.folders[path]) this.setExpanded(path, true);
   }
-  async expand(path: string) {
-    this.expanded[path] = true;
-    await this.load(path, true);
+  collapse(path: string) {
+    this.setExpanded(path, false);
   }
-  async reveal(parent: string) {
+  private setExpanded(path: string, expanded: boolean) {
+    // Svelte does not proxy null-prototype dictionaries; replace the state value.
+    this.expanded = Object.assign(Object.create(null), this.expanded, { [path]: expanded });
+  }
+  reveal(parent: string) {
     const parts = parent ? parent.split('/') : [];
-    await this.expand('');
+    this.expand('');
     let path = '';
     for (const part of parts) {
       path = path ? `${path}/${part}` : part;
-      await this.expand(path);
+      this.expand(path);
     }
   }
 }

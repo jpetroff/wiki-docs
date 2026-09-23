@@ -19,7 +19,12 @@
   Page/folder creation is implemented; uploads, moves, renames, and deletion remain deferred.
 - **Editor:** Blok client-only, Markdown-compatible tools; Monaco for code and source mode. Preserve frontmatter
   and fall back to plain Markdown source for unsupported constructs. Source
-  editing remains available. Never silently discard unsupported content.
+  editing remains available. Preserve unsupported imported content through source fallback.
+- **Markdown tables (implemented):** Use Blok's unmodified Table tool and native
+  Markdown import/export for the entire document. Keep this integration simple:
+  no dependency patches, custom table serializer, or custom table controls.
+  Initial semantic round-trip validation protects imported documents; subsequent
+  visual edits use Blok's output and its formatting limitations. See editing.md.
 - **Save visibility:** Local saves become publicly visible immediately. Publish
   synchronizes Git; it is not a reader-visibility or approval boundary.
 - **Publishing:** Any editor can review and publish all pending wiki edits.

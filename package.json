@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "bun --bun vite dev",
-    "build": "RAYON_NUM_THREADS=2 bun --bun vite build",
+    "build": "bun scripts/build-app.ts",
     "start": "bun build/index.js",
     "check": "bun --bun svelte-kit sync && bun --bun svelte-check --tsconfig ./tsconfig.json",
     "test": "bun test",
     "test:smoke": "bun scripts/smoke.ts",
     "prepare": "bun --bun svelte-kit sync",
-    "accounts": "bun scripts/accounts.ts"
+    "accounts": "bun scripts/accounts.ts",
+    "cache": "bun scripts/scan-docs.ts --output build/navigation.yaml"
   },
   "engines": {
     "bun": ">=1.4.0"

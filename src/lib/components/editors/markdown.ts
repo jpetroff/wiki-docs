@@ -1,11 +1,8 @@
+import { splitFrontmatter } from '../../shared/frontmatter';
+export { splitFrontmatter } from '../../shared/frontmatter';
 import MarkdownIt from 'markdown-it';
 
 const parser = new MarkdownIt({ html: true, linkify: true, typographer: false });
-export function splitFrontmatter(source: string) {
-  const match = /^(\uFEFF?---\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)(?:\r?\n|$))/.exec(source);
-  return { prefix: match?.[0] ?? '', body: source.slice(match?.[0].length ?? 0) };
-}
-
 /** Conservative check: source mode keeps unsupported syntax byte-for-byte. */
 export function supportsVisualMarkdown(source: string): boolean {
   const { body } = splitFrontmatter(source);

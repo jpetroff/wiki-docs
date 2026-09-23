@@ -64,7 +64,7 @@ test('resolves directories independently of README and preserves exact encoded p
 });
 
 test('extracts the first top-level H1 and makes Unicode filenames without changing source', () => {
-  expect(documentStem('---\ntitle: Wrong\n---\n```md\n# Wrong\n```\n> # Wrong\n\n## Wrong\n\n# **Héllo** [世界](url) `API`!\n# Later')).toBe('héllo-世界-api');
+  expect(documentStem('---\nother: Ignored\n---\n```md\n# Wrong\n```\n> # Wrong\n\n## Wrong\n\n# **Héllo** [世界](url) `API`!\n# Later')).toBe('héllo-世界-api');
   expect(documentStem('Title\n=====')).toBe('title');
   expect(documentStem('# !!!\n# Later')).toBeUndefined();
   expect(documentStem('## No title')).toBeUndefined();

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { entryTitle } from '$lib/shared/navigation';
   import { copyCode } from '$lib/actions/copy-code';
   import { renderMermaid } from '$lib/actions/mermaid';
   import { Button } from '$lib/components/ui/button';
@@ -8,7 +9,7 @@
   let { data } = $props();
 </script>
 
-<svelte:head><title>{data.edit ? `Edit ${data.edit.path} — ` : data.directory ? `${data.directory.name || 'Documentation'} — ` : data.result?.status === 'ok' ? `${data.result.value.title} — ` : ''}{data.config.siteTitle}</title></svelte:head>
+<svelte:head><title>{data.edit ? `Edit ${data.edit.path} — ` : data.directory ? `${entryTitle(data.directory, data.config.siteTitle)} — ` : data.result?.status === 'ok' ? `${data.result.value.title} — ` : ''}{data.config.siteTitle}</title></svelte:head>
 {#if data.edit}
   {#key data.edit.path + data.edit.revision}
     <DocumentEditor document={data.edit} returnTo={data.request.pathname} />

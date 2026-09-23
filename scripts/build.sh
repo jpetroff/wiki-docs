@@ -27,6 +27,7 @@ mkdir "$stage/output"
 bun build "$stage/adapter/index.js" --target=bun --outdir="$stage/output"
 bun build scripts/accounts.ts --target=bun --outfile="$stage/output/accounts.js"
 bun build scripts/check-database-path.ts --target=bun --outfile="$stage/output/check-database-path.js"
+cp "$stage/adapter/scan-docs.js" "$stage/output/scan-docs.js"
 cp -a "$stage/adapter/client" "$stage/output/"
 if [[ -d $stage/adapter/prerendered ]]; then
   cp -a "$stage/adapter/prerendered" "$stage/output/"
@@ -45,7 +46,7 @@ bash "$project/scripts/instance.sh" stop "$root" "$port" 8>&-
 # Preserve only process coordination and the append-only runtime log. This also
 # removes the old releases/current layout when upgrading an existing deployment.
 find "$root" -mindepth 1 -maxdepth 1 \
-  ! -name .build.lock ! -name .instance.lock ! -name instance.log \
+  ! -name .build.lock ! -name .instance.lock ! -name instance.log ! -name navigation.yaml \
   -exec rm -rf -- {} +
 cp -a "$stage/output/." "$root/"
 bash "$project/scripts/instance.sh" start "$root" "$port" 8>&-

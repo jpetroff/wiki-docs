@@ -1,3 +1,6 @@
+import { dev } from '$app/environment';
+import { dirname, resolve } from 'node:path';
+import { createNavigationCache } from './cache';
 import type { ServiceResult } from '../../shared/result';
 import type { DocumentationMode } from '../../shared/request';
 import { getServerConfig } from '../config';
@@ -17,6 +20,8 @@ export interface DocumentationService {
   save(input: SaveDocumentInput): Promise<SaveResult>;
 }
 export const documentationFiles = createFileReader(() => getServerConfig().docsDir);
+export const navigationCache = createNavigationCache(() => getServerConfig().docsDir,
+  () => resolve(dev ? 'build' : dirname(resolve(process.argv[1])), 'navigation.yaml'));
 export const documentationService: DocumentationService = {
   async resolve(pathname) {
     return documentationFiles.resolve(pathname);
@@ -33,7 +38,7 @@ export const documentationService: DocumentationService = {
     } };
   },
   resolveDirectory: documentationFiles.resolveDirectory,
-  list: documentationFiles.list,
+  list: navigationCache.list,
   createFolder: documentationFiles.createFolder,
   createDocument: documentationFiles.createDocument,
   async save(input) { return documentationFiles.save(input.path, input.content, input.originalRevision); }

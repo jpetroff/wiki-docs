@@ -16,7 +16,7 @@ Paths below are relative to `src/`.
 | `routes/[...path]/+page.svelte` | SSR Edit control only when `canEdit`; mount editor keyed by path/revision. |
 | `lib/components/editors/document-editor.svelte` | Lazy loading, mode switches, save requests, dirty/busy state, navigation guards, recovery. |
 | `lib/components/editors/types.ts` | Adapter contract: `getValue(): Promise<string>`, `destroy(): void`. |
-| `lib/components/editors/blok.ts` | Restricted Blok tools, Markdown import, round-trip validation. |
+| `lib/components/editors/blok.ts` | Blok tools including native Table, native Markdown import/export, initial round-trip validation. |
 | `lib/components/editors/markdown.ts` | Unsupported-syntax detection, frontmatter/EOL preservation, semantic comparison. |
 | `lib/components/editors/monaco.ts` | Code/source editing, language mapping, theme, worker/model lifecycle. |
 | `routes/_/api/documents/+server.ts` | Origin/auth checks, bounded JSON validation, HTTP status mapping. |
@@ -31,16 +31,26 @@ control in HTML. Page responses use `Cache-Control: no-store`; editor engines lo
 only in the browser when editing.
 
 Blok enables paragraphs, H1–H6, lists/checklists, quotes, dividers, code, top-level
-Markdown pipe tables, bold, italic, links, strikethrough, and inline code. Existing text-tool
-definitions exclude colors, sizes, and collapsible headings; tables use native controls. HTML, images,
-tables nested in lists/quotes, reference definitions,
+Markdown pipe tables, bold, italic, links, strikethrough, and inline code. Existing
+text-tool definitions exclude colors, sizes, and collapsible headings; tables use
+native controls. HTML, images, tables nested in lists/quotes, reference definitions,
 import warnings, unknown block types, or unequal markdown-it render output trigger
 Monaco fallback. Frontmatter is retained separately; unchanged exports return the
 original source. Changed visual exports restore EOL style and terminal-newline presence.
 
+Monaco handles code files and Markdown source mode. It uses the shared language
+mapping, GitHub dark palette, basic TOML/JSON tokenizers, same-origin Vite workers,
+and textarea input (`editContext: false`). Mode switches serialize before disposal.
+Initialization is inert until ready; failures expose recoverable source and retry.
+Adapters dispose editors, models, and listeners on exit.
+
 ### Markdown tables
 
 The bundled, unmodified Blok Table tool is registered with `withHeadings: true`.
+New tables use the package's default dimensions and native editing controls;
+inline formatting uses the editor's existing toolbar. Top-level pipe tables are
+eligible for visual editing, subject to the initial round-trip check.
+
 Import uses Blok's `markdownToBlocksWithReport`; baseline and edited output use
 `editor.blocks.exportMarkdown()` for the whole document. There is no package patch,
 custom serializer, table reconciliation, or custom table UI. Blok owns conversion
@@ -49,11 +59,23 @@ heading columns and styling). The existing semantic import guard still falls bac
 to source mode when native import/export changes the source's rendered meaning.
 Frontmatter, EOL style and unchanged original bytes remain preserved by the adapter.
 
-Monaco handles code files and Markdown source mode. It uses the shared language
-mapping, GitHub dark palette, basic TOML/JSON tokenizers, same-origin Vite workers,
-and textarea input (`editContext: false`). Mode switches serialize before disposal.
-Initialization is inert until ready; failures expose recoverable source and retry.
-Adapters dispose editors, models, and listeners on exit.
+For Blok 1.13.0, explicitly aligned tables fall back to source mode because native
+conversion loses alignment. Header-only tables can also fail the round-trip check
+because the importer disables their heading row. No application workaround is
+applied. Nested tables and raw HTML in cells are rejected by the syntax precheck.
+
+The semantic comparison runs when mounting the visual editor, not on every save.
+Once editing begins, saves and mode switches accept Blok's native Markdown output,
+including its conversions of rich table features and multi-block cells. If that
+output contains unsupported syntax such as `<br>`, reopening may use source mode.
+The adapter restores original bytes only when the native export equals its initial
+baseline; otherwise it restores frontmatter and newline conventions around the export.
+
+Validation for this implementation: `bun run check` and seven focused tests across
+`markdown.test.ts`, `blok.test.ts`, and `scripts/blok-assets.test.ts` passed. The
+adapter tests mock Blok to verify native-export delegation, unchanged source/CRLF/
+frontmatter preservation, and semantic fallback. They do not test Blok's browser
+interactions. No Playwright tests were run for the final unpatched implementation.
 
 ## Save contract and consistency
 

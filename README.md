@@ -2,7 +2,8 @@
 
 A documentation reader and editor built with SvelteKit, Bun, TypeScript,
 Tailwind CSS, markdown-it, and Shiki. Pages contain server-rendered HTML and
-reflect the current files on every request. Reading does not require JavaScript.
+read document bodies from the current files on every request. Navigation uses a
+manually generated metadata snapshot. Reading does not require JavaScript.
 Username/password login, local account administration, folder navigation, directory
 listings, and document editing/creation are available. Browser account management
 and Git publishing remain placeholders.
@@ -45,7 +46,7 @@ This causes a brief interruption. There are no versioned releases or rollback;
 a compilation failure leaves the existing instance running.
 
 Use a dedicated deployment directory: its contents are replaced on every build,
-except the process lock files and `instance.log`, which keeps appended logs.
+except the process lock files, `navigation.yaml`, and `instance.log`, which keeps appended logs.
 The old `releases/` directory and `current` symlink are removed automatically.
 `make status` reports the PID and port, returning exit status 1 when stopped.
 
@@ -73,7 +74,8 @@ or crash recovery is not provided.
 
 You can also invoke `bash scripts/instance.sh {start|status|stop|reload}
 [build-directory] [port]` directly. `bun run build` still produces the usual
-local `build/` output without deploying it.
+local `build/` output without deploying it, including the standalone scanner and
+owner-only copies of the environment files. Existing navigation caches are preserved.
 
 ## Reading and URLs
 
@@ -122,9 +124,9 @@ Editors and administrators see a **+** beside each folder and the root:
 - **New folder** asks for a name, preserves its trimmed spelling, and creates the
   directory with a blank `README.md`. Existing names are rejected.
 - **New document** opens a draft under `/_/new?parent=<relative-path>`. It writes
-  nothing until Save. Use the first top-level Markdown H1 for the title; code fences,
-  frontmatter, and headings inside quotes/lists do not supply the filename.
-- Saving normalizes the heading into a lowercase Unicode filename with `.md`.
+  nothing until Save. Use a front matter `title`, falling back to the first top-level Markdown H1;
+  code fences and headings inside quotes/lists do not supply the filename.
+- Saving normalizes the selected title into a lowercase Unicode filename with `.md`.
   Punctuation and whitespace become hyphens. Existing names receive `-2`, `-3`, etc.
   Filenames stay within 255 UTF-8 bytes. Markdown content is preserved unchanged.
 - The saved document stays in the editor; newer input made during the save is retained
@@ -136,7 +138,8 @@ Editors and administrators see a **+** beside each folder and the root:
 value); an empty path selects root. Integer depth 0 returns folder metadata, depth 1
 includes immediate children, and up to 10 child levels can be requested. Directory
 nodes contain `kind`, `name`, `path`, `hasIndex`, `hasChildren`, and optional `children`;
-file nodes contain `kind: "file"`, `name`, and `path`. Responses are not cached.
+file nodes contain `kind: "file"`, `name`, and `path`. Both may include a front matter
+`title`. Responses are sliced from the static snapshot and use HTTP `no-store`.
 
 Creation uses JSON `POST /_/api/folders` with `{parentPath, name}` or
 `POST /_/api/documents/create` with `{parentPath, content}`. Both require a same-origin
@@ -151,6 +154,63 @@ partial document and occupied names are never replaced. Folder creation is exclu
 failed operations remove only their own empty artifacts. External filesystem writers
 are not locked, so the existing checkout must remain under trusted local control.
 Uploads, moves, renames, deletion, durable drafts, and Git publishing remain deferred.
+
+## Front matter and navigation cache
+
+Markdown may begin with YAML front matter:
+
+```markdown
+---
+title: Getting started
+owner: Documentation team
+tags: [setup, reference]
+---
+# Introduction
+```
+
+Only a trimmed, nonempty string `title` affects behavior. Additional fields are
+accepted without schema validation and remain unchanged in the source. The reader
+hides a complete leading block, terminated by `---` or `...`; BOM and CRLF files
+are supported. Invalid YAML emits a scanner warning and ignores the metadata title.
+An unclosed block remains ordinary Markdown. The editor preserves the original
+front matter bytes; edit metadata in source mode.
+
+Tree and listing labels use front matter titles, falling back to actual names.
+Directories inherit the title of their exact `README.md`; root falls back to
+`SITE_TITLE`. Reader page titles prefer front matter, then the existing Markdown
+heading/filename fallback. Titles do not alter URLs or insert a heading into the body.
+
+Generate the initial snapshot manually after configuring `DOCS_DIR`:
+
+```sh
+# From the source checkout, for the development server:
+bun run cache
+
+# From the deployment or ordinary build directory:
+NODE_ENV=production bun scan-docs.js
+```
+
+The bundled command needs only Bun and the copied environment files. It scans all
+visible supported documents and directories, with no ten-level traversal limit,
+and atomically replaces `navigation.yaml` beside the command. The development
+command writes `build/navigation.yaml`. Fatal scan failures leave the old snapshot
+intact and exit nonzero. The YAML contains nested `title`, `href`, and `items` entries. Directory links point
+to their `README.md`; directories without a README omit `href` and retain a `path`
+for section contents pages, including empty folders. Titles fall back to filenames
+or directory names. A header comment stores the format version and root fingerprint;
+document bodies and unrelated front matter fields are excluded.
+
+No scan runs automatically during builds, startup, editing, or creation. Rebuilds
+preserve the existing cache. After changing files or titles, run the scanner and
+fully reload the page. The running server detects cache replacement without a
+restart; the browser keeps its loaded tree until reload. Folder expansion and
+reveal use this complete in-memory tree without fetching branches. Opening a
+document still fetches its current body.
+
+Missing, invalid, or wrong-root caches show navigation unavailable; directory
+listings and the folders GET API return 503. Direct document reads, readable README
+directory views, editing, and creation remain live. New files and title changes do
+not appear in navigation until rescanning and reloading.
 
 ## Markdown and highlighting
 
@@ -187,7 +247,9 @@ configuration-presence flag, rendered content, documentation-relative paths, and
 the signed-in user’s ID, username, and role. Password hashes, session tokens, and
 absolute storage paths are never serialized into page data.
 Unavailable roots produce a generic 503; unexpected read failures produce a generic
-500 with details logged server-side. No content cache is kept across requests.
+500 with details logged server-side. Document bodies are not cached across requests.
+The server retains the navigation snapshot in memory and detects replacements on
+subsequent requests.
 
 ## Accounts and login
 

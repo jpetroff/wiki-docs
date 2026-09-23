@@ -1,3 +1,4 @@
+import { parseFrontmatter } from './frontmatter';
 import { realpath, stat, readFile, open, rename, unlink, readdir, mkdir, rmdir, link } from 'node:fs/promises';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { documentExtensions, imageExtensions, extensionOf } from '../../shared/highlighting';
@@ -83,8 +84,8 @@ export function createFileReader(getRoot: () => string | undefined) {
       return { status: 'ok', value: { kind: 'directory', path: logical } };
     } catch (error) { if (isMissing(error)) return missing(); throw error; }
   }
-  async function list(path: string, depth = 1): Promise<ServiceResult<DirectoryNode>> {
-    if (!validLogical(path) || !Number.isInteger(depth) || depth < 0 || depth > 10) return missing();
+  async function list(path: string, depth = 1, warn?: (path: string, message: string) => void): Promise<ServiceResult<DirectoryNode>> {
+    if (!validLogical(path) || ((!Number.isInteger(depth) || depth < 0 || depth > 10) && depth !== Infinity)) return missing();
     const base = await root();
     if (!base) return { status: 'unavailable' };
     async function scan(logical: string, remaining: number): Promise<DirectoryNode | undefined> {
@@ -92,6 +93,7 @@ export function createFileReader(getRoot: () => string | undefined) {
       if (!location) return;
       const entries: NavigationEntry[] = [];
       let hasIndex = false;
+      let title: string | undefined;
       for (const name of await readdir(location.actual)) {
         const path = childPath(logical, name);
         if (!validLogical(path)) continue;
@@ -111,15 +113,17 @@ export function createFileReader(getRoot: () => string | undefined) {
             let content: string;
             try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { continue; }
             if (content.includes('\0')) continue;
-            if (name === 'README.md') hasIndex = true;
-            else entries.push({ kind: 'file', name, path });
+            const metadata = extensionOf(name) === '.md' ? parseFrontmatter(content) : undefined;
+            if (metadata?.warning) warn?.(path, metadata.warning);
+            if (name === 'README.md') { hasIndex = true; title = metadata?.title; }
+            else entries.push({ kind: 'file', name, path, ...(metadata?.title ? { title: metadata.title } : {}) });
           }
         } catch (error) { if (!isMissing(error)) throw error; }
       }
       entries.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'directory' ? -1 : 1) ||
         a.name.localeCompare(b.name, 'en', { numeric: true, sensitivity: 'base' }) || a.name.localeCompare(b.name, 'en'));
       return { kind: 'directory', name: logical.split('/').at(-1) ?? '', path: logical,
-        hasIndex, hasChildren: entries.length > 0, ...(remaining > 0 ? { children: entries } : {}) };
+        hasIndex, ...(title ? { title } : {}), hasChildren: entries.length > 0, ...(remaining > 0 ? { children: entries } : {}) };
     }
     try {
       const result = await scan(path, depth);
@@ -232,7 +236,7 @@ export function createFileReader(getRoot: () => string | undefined) {
   function createDocument(parentPath: string, content: string): Promise<CreateResult<{ path: string; revision: string }>> {
     return serialize(async () => {
       const stem = documentStem(content);
-      if (!stem) return { status: 'invalid', message: 'Add a top-level H1 title containing letters or numbers before saving.' };
+      if (!stem) return { status: 'invalid', message: 'Add a front matter title or top-level H1 containing letters or numbers before saving.' };
       if (content.includes('\0') || !content.isWellFormed() || !validLogical(parentPath)) return { status: 'invalid', message: 'Invalid document' };
       const base = await root();
       if (!base) return { status: 'unavailable' };
